@@ -2,7 +2,12 @@ import numpy as np
 from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, PillowWriter
-from pprint import pprint
+from sklearn.model_selection import train_test_split
+import torch
+import torch.nn as nn
+from torch.utils.data import TensorDataset, DataLoader
+import lightning.pytorch as pl
+from deep_model import prepare_data, RNNModel, Model
 
 
 plt.rcParams.update({
@@ -89,7 +94,11 @@ class BoxModel:
         FW_max = 5
     
         if is_Fs_time_dependent:
-            flux = FW_min + (FW_max - FW_min) * time / time_max
+            # Linear interpolation between minimum F and maximum F
+            # flux = FW_min + (FW_max - FW_min) * time / time_max
+            half_range = (FW_max - FW_min) / 2
+            # np.sin(time/200000000000)
+            flux = FW_min + half_range + np.sin(8*time/time_max) * half_range
         else:
             flux = 2
     
@@ -201,72 +210,82 @@ def plot_rhs(model, time, time_max, DeltaS_range, fig=None, ax=None):
 
 def plot_time_series(model, time_max, fig=None, ax=None):
     is_Fs_time_dependent = True
-    teval1 = np.arange(0, time_max, time_max / 1000)
-    teval2 = np.arange(time_max / 2, time_max, time_max / 1000)
-    tspan1 = (teval1[0], teval1[-1])
-    tspan2 = (teval2[0], teval2[-1])
+    teval = np.arange(0, time_max, time_max / 1000)
+    tspan = (teval[0], teval[-1])
     
-    sol_DS1 = solve_ivp(
+    sol_DS = solve_ivp(
         fun=lambda time, DeltaS: model.rhs_S(time, time_max, is_Fs_time_dependent, DeltaS=DeltaS),
         vectorized=False,
         y0=[0],
-        t_span=tspan1,
-        t_eval=teval1,
+        t_span=tspan,
+        t_eval=teval,
         dense_output=True,
     )
-    Time_DS1 = sol_DS1.t
-    DeltaS1 = sol_DS1.y
+    Time_DS = sol_DS.t
+    DeltaS = sol_DS.y
 
-    sol_DS2 = solve_ivp(
-        fun=lambda time, DeltaS: model.rhs_S(time, time_max, is_Fs_time_dependent, DeltaS=DeltaS),
-        vectorized=False,
-        y0=[DeltaS1[0][-1]],
-        t_span=tspan2,
-        t_eval=teval2,
-        dense_output=True,
-    )
-    Time_DS2 = sol_DS2.t
-    DeltaS2 = sol_DS2.y
+    FWplot = np.zeros(len(Time_DS))
+    qplot = np.zeros(len(Time_DS))
 
-    is_Fs_time_dependent = True
-    FWplot1 = np.zeros(len(Time_DS1))
-    qplot1 = np.zeros(len(Time_DS1))
+    for i, t in enumerate(Time_DS):
+        FWplot[i] = model.Fs_func(t, time_max, is_Fs_time_dependent)
+        qplot[i] = model.q(model.DeltaT, DeltaS[0, i])
 
-    for i, t in enumerate(Time_DS1):
-        FWplot1[i] = model.Fs_func(t, time_max, is_Fs_time_dependent)
-        qplot1[i] = model.q(model.DeltaT, DeltaS1[0, i])
-
-    FWplot2 = np.zeros(len(Time_DS1))
-    qplot2 = np.zeros(len(Time_DS1))
-
-    for i, t in enumerate(Time_DS2):
-        FWplot2[i] = model.Fs_func(t, time_max, is_Fs_time_dependent)
-        qplot2[i] = model.q(model.DeltaT, DeltaS2[0, i])
-
-    xs1 = Time_DS1 / YEAR / 1000
-    xs2 = Time_DS2 / YEAR / 1000
-
-    xs = np.append(xs1, xs2)
-    Time_DS = np.append(Time_DS1, Time_DS2)
-    qplot = np.append(qplot1, qplot2) / Sv
-    DeltaS = np.append(DeltaS1, DeltaS2, axis=1)
+    xs = Time_DS / YEAR / 1000
 
     if (fig, ax) == (None, None):
-        fig, ax = plt.subplots(figsize=(9, 7))
+        fig, ax = plt.subplots(ncols=3, figsize=(9, 7))
 
-    artists = []
-    a = ax.plot(xs1, Time_DS1 * 0, 'k--', dashes=(10, 5), lw=0.5)
-    artists.append(a[0])
-    a = ax.plot(xs1, qplot1, label='\(q\) (Sv)')
-    artists.append(a[0])
-    a = ax.plot(xs1, DeltaS1[0, :], label='\(\Delta S\)')
-    artists.append(a[0])
+    F = FWplot / Fs_to_m_per_year(model.S0, model.area)
+    ax[0].plot(xs, F, 'b-', markersize=1)
+    ax[0].plot(xs, Time_DS*0, 'k--', dashes=(10, 5), linewidth=0.5)
+    ax[0].set_xlabel('Time (kyr)')
+    ax[0].set_ylabel('$F$ (m/yr)')
+    ax[0].set_title('Forcing')
 
-    ax.set_xlabel('Time (kyr)')
-    ax.set_title('(e) THC transport \(q\)')
-    ax.legend()
+    y = qplot / Sv
+    ax[1].plot(xs, y, 'b-', markersize=1)
+    ax[1].plot(xs, Time_DS*0, 'k--', dashes=(10, 5), lw=0.5)
+    ax[1].set_xlabel('Time (kyr)')
+    ax[1].set_ylabel('$q$ (Sv)')
+    ax[1].set_title('THC transport')
 
-    return fig, ax, artists
+    ax[2].plot(xs, DeltaS[0, :], 'b-', markersize=1)
+    ax[2].plot(xs, Time_DS*0, 'k--', dashes=(10, 5), lw=0.5)
+    ax[2].set_title('$\Delta S$ vs time')
+    ax[2].set_xlabel('Time (kyr)')
+    ax[2].set_ylabel('$\Delta S$')
+
+    fig.tight_layout()
+
+    X = xs
+
+    return fig, ax, F, X, y
+
+
+def animation(filename, fig, ax, model, time_max):
+    n_frames = 30
+    sin_range = np.sin(np.linspace(0, 10, num=n_frames))
+
+    def animate(i):
+        ax.clear()
+        _, _, artists = plot_time_series(model, time_max, fig=fig, ax=ax)
+        # model.T2 += 0.1
+        model.T2 = sin_range[i]
+        ax.set_title(f'\(T_1 = {model.T1}\), \(T_2 = {model.T2}\)')
+        return artists
+    
+    anim = FuncAnimation(
+        fig, animate, interval=1, blit=True, repeat=True, frames=n_frames,
+    )
+    anim.save(filename, dpi=300, writer=PillowWriter(fps=5))
+
+
+def simple_simulation(area, year, S0, S1, S2, T1, T2, alpha, beta, k, depth):
+    Fs_range = np.arange(0, 5, 0.01)
+    Fs_range = scale_Fs(Fs_range, area, S0, year)
+    model = BoxModel(S0, S1, S2, T1, T2, alpha, beta, k, area, depth)
+    return model.simulate(Fs_range)
 
 
 def main():
@@ -286,37 +305,76 @@ def main():
     DeltaS_range = np.arange(-3, 0, 0.01)
     model = BoxModel(S0, S1, S2, T0, T1, T2, alpha, beta, k, area, depth)
 
-    fig, ax = plt.subplots()
-    _ = plot_time_series(model, time_max, fig=fig, ax=ax)
+    fig, ax = None, None
+    _, _, F, X, y = plot_time_series(model, time_max, fig=fig, ax=ax)
     # _ = plot_rhs(model, time, time_max, DeltaS_range, fig=fig, ax=ax)
-    plt.show()
-    exit()
-    n_frames = 30
-    sin_range = np.sin(np.linspace(0, 10, num=n_frames))
+    
+    X_train, X_test, y_train_, y_test_ = train_test_split(X, y, test_size=0.5, shuffle=False)
 
-    def animate(i):
-        ax.clear()
-        # ax.set_autoscale_on(False)
-        # ax.set_ylim([-4, 15])
-        # ax.set_xlim([0, 50])
-        _, _, artists = plot_time_series(model, time_max, fig=fig, ax=ax)
-        # model.T2 += 0.1
-        model.T2 = sin_range[i]
-        ax.set_title(f'\(T_1 = {model.T1}\), \(T_2 = {model.T2}\)')
-        return artists
-        
-    anim = FuncAnimation(
-        fig, animate, interval=1, blit=True, repeat=True, frames=n_frames,
+    num_epochs = 100
+    lr = 1e-3
+    seq_len = 25
+    batch_size = 16
+
+    input_size = 1
+    hidden_size = 128
+    num_layers = 2
+    num_classes = 1
+
+    rnn = RNNModel(
+        num_classes,
+        input_size,
+        hidden_size,
+        num_layers,
+        seq_len,
     )
-    anim.save('box.gif', dpi=300, writer=PillowWriter(fps=5))
 
-    # plt.show()
+    criterion = nn.MSELoss()
 
-    exit()
-    Fs_range = np.arange(0, 5, 0.01)
-    Fs_range = scale_Fs(Fs_range, area, S0, year)
-    model = BoxModel(S0, S1, S2, T1, T2, alpha, beta, k, area, depth)
-    DeltaS_steady, q_steady = model.simulate(Fs_range)
+    (X_train, y_train), (X_test, y_test) = prepare_data(
+        y_train_.reshape(-1, 1),
+        y_test_.reshape(-1, 1),
+        seq_len=seq_len,
+    )
+    X_train = torch.from_numpy(X_train)
+    X_test = torch.from_numpy(X_test)
+    y_train = torch.from_numpy(y_train)
+    y_test = torch.from_numpy(y_test)
+
+    train_set = TensorDataset(X_train, y_train)
+    test_set = TensorDataset(X_test, y_test)
+
+    train_loader = DataLoader(train_set, batch_size=batch_size)
+    test_loader = DataLoader(test_set, batch_size=batch_size)
+
+    trainer = pl.Trainer(
+        max_epochs=num_epochs,
+    )
+
+    pl_model = Model(rnn, criterion, lr)
+    trainer.fit(pl_model,
+                train_dataloaders=train_loader,
+                val_dataloaders=test_loader)
+
+    pl_model.eval()
+
+    with torch.no_grad():
+        train_pred = pl_model(X_train).view(-1)
+        test_pred = pl_model(X_test).view(-1)
+
+    fig, ax = plt.subplots(ncols=2)
+
+    ax[0].plot(y_train_, label='Ground Truth')
+    ax[0].plot(train_pred, label='Prediction')
+    ax[0].set_title('Training Set')
+    ax[0].legend()
+
+    ax[1].plot(y_test_, label='Ground Truth')
+    ax[1].plot(test_pred, label='Prediction')
+    ax[1].set_title('Test Set')
+    ax[1].legend()
+
+    plt.show()
 
 
 if __name__ == '__main__':
