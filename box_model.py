@@ -3,6 +3,7 @@ import numpy as np
 import scipy as sp
 from matplotlib.animation import FuncAnimation, PillowWriter
 
+# Constants
 YEAR = 365 * 24 * 3600
 Sv = 1.e9 # m^3/sec
 
@@ -77,39 +78,42 @@ class BoxModel:
         Y = np.array([y1, y2, y3])
         return Y
 
-    def Fs_func(self, time, time_max, is_Fs_time_dependent):
-        # total surface salt flux into northern box
-        # Specify maximum and minimum of freshwater forcing range during the
-        # run in m/year:
-        FW_min = -0.1
-        FW_max = 5
-    
-        if is_Fs_time_dependent:
-            # Linear interpolation between minimum F and maximum F
-            # flux = FW_min + (FW_max - FW_min) * time / time_max
-            half_range = (FW_max - FW_min) / 2
-            # np.sin(time/200000000000)
-            flux = FW_min + half_range + np.sin(13*time/time_max) * half_range
-        else:
-            flux = 2
-    
-        # convert to total salt flux:
+    def Fs_constant(self, time, time_max, flux=2):
         return flux * self.area * self.S0 / YEAR
 
-    def rhs_S(self, time, time_max, is_Fs_time_dependent, DeltaT=None, DeltaS=None):
-        # Input: q in m^3/sec; FW is total salt flux into box
+    def Fs_linear(self, time, time_max, FW_min=-0.1, FW_max=5):
+        # Linear interpolation between minimum F and maximum F
+        flux = FW_min + (FW_max - FW_min) * time / time_max
+        return flux * self.area * self.S0 / YEAR
+    
+    def Fs_sinusoidal(self, time, time_max, FW_min=-0.1, FW_max=5):
+        # Sinusoidal interpolation between minimum F and maximum F
+        half_range = (FW_max - FW_min) / 2
+        flux = FW_min + half_range + np.sin(13 * time / time_max) * half_range
+        return flux * self.area * self.S0 / YEAR
+    
+    def rhs_S(self, time, time_max, fn_forcing=None, DeltaT=None, DeltaS=None):
+        """
+        Implements the right-hand side of the derivative of S wrt. t (time).
+        """
+        if fn_forcing is None:
+            fn_forcing = self.Fs_sinusoidal
+
         DeltaT = self.DeltaT if DeltaT is None else DeltaT
         DeltaS = self.DeltaS if DeltaS is None else DeltaS
         
-        F_s = self.Fs_func(time, time_max, is_Fs_time_dependent)
-        # rhs = 2 * (F_s - abs(self.q(DeltaT, DeltaS)) * DeltaS)
+        F_s = fn_forcing(time, time_max)
         # Optional: with S0
         # rhs = -(2 * abs(self.q(DeltaT, DeltaS)) * DeltaS + 2 * F_s * self.S0)
         rhs = -(2 * abs(self.q(DeltaT, DeltaS)) * DeltaS + 2 * F_s)
+
         return rhs / self.V
 
     def simulate(self, Fs_range):
-        # Compute the steady state solutions as well as the q values for the above values of F.
+        """
+        Computes the steady state solutions as well as the q values
+        for the above values of F.
+        """
         DeltaS_steady = np.zeros((3, len(Fs_range)))
         q_steady = np.zeros((3, len(Fs_range)))
         
@@ -132,40 +136,36 @@ def Fs_to_m_per_year(S0, area):
 
 
 def plot_steady(Fs_range, DeltaS_steady, q_steady, S0, area, normalize=True):
-    plt.figure(1, figsize=(8, 4), dpi=200)
-    
     Fs_range_normalized = np.copy(Fs_range)
     if normalize:
         Fs_range_normalized /= Fs_to_m_per_year(S0, area, YEAR)
     
-    plt.subplot(1, 2, 1)
-    # plot all three solutions for Delta S as function of Fs in units of m/year:
-    plt.plot(Fs_range_normalized, DeltaS_steady[0, :], 'r.', markersize=1)
-    plt.plot(Fs_range_normalized, DeltaS_steady[1, :], 'g.', markersize=1)
-    plt.plot(Fs_range_normalized, DeltaS_steady[2, :], 'b.', markersize=1)
-    
-    # plot a dash think line marking the zero value:
-    plt.plot(Fs_range_normalized, np.zeros(DeltaS_steady.shape[1]), 'k--', dashes=(10, 5), linewidth=0.5)
-    plt.title('(a) steady states')
-    plt.xlabel('$F_s$ (m/year)');
-    plt.ylabel('$\Delta S$');
-    plt.xlim([min(Fs_range_normalized), max(Fs_range_normalized)])
-    
-    plt.subplot(1, 2, 2)
-    # plot all three solutions for q (in Sv) as function of Fs in units of m/year:
-    plt.plot(Fs_range_normalized, q_steady[0, :], 'r.', markersize=1)
-    plt.plot(Fs_range_normalized, q_steady[1, :], 'g.', markersize=1)
-    plt.plot(Fs_range_normalized, q_steady[2, :], 'b.', markersize=1)
-    plt.plot(Fs_range_normalized, np.zeros(q_steady.shape[1]), 'k--', dashes=(10, 5), linewidth=0.5)
-    plt.title('(b) steady states')
-    plt.xlabel('$F_s$ (m/year)')
-    plt.ylabel('$q$ (Sv)')
-    plt.tight_layout()
+    fig, ax = plt.subplots(ncols=2)
 
-    ls_min_max_1 = [(min(DeltaS_steady[i, :]), max(DeltaS_steady[i, :])) for i in range(3)]
-    ls_min_max_2 = [(min(q_steady[i, :]), max(q_steady[i, :])) for i in range(3)]
+    # Plot all three solutions for Delta S as function of Fs in units of m/year:
+    ax[0].plot(Fs_range_normalized, DeltaS_steady[0, :], 'r.', markersize=1)
+    ax[0].plot(Fs_range_normalized, DeltaS_steady[1, :], 'g.', markersize=1)
+    ax[0].plot(Fs_range_normalized, DeltaS_steady[2, :], 'b.', markersize=1)
+    
+    # Plot a dash think line marking the zero value:
+    ax[0].plot(Fs_range_normalized, np.zeros(DeltaS_steady.shape[1]), 'k--', dashes=(10, 5), linewidth=0.5)
+    ax[0].title('(a) steady states')
+    ax[0].xlabel('$F_s$ (m/year)');
+    ax[0].ylabel('$\Delta S$');
+    ax[0].xlim([min(Fs_range_normalized), max(Fs_range_normalized)])
+    
+    # Plot all three solutions for q (in Sv) as function of Fs in units of m/year:
+    ax[1].plot(Fs_range_normalized, q_steady[0, :], 'r.', markersize=1)
+    ax[1].plot(Fs_range_normalized, q_steady[1, :], 'g.', markersize=1)
+    ax[1].plot(Fs_range_normalized, q_steady[2, :], 'b.', markersize=1)
+    ax[1].plot(Fs_range_normalized, np.zeros(q_steady.shape[1]), 'k--', dashes=(10, 5), linewidth=0.5)
+    ax[1].title('(b) steady states')
+    ax[1].xlabel('$F_s$ (m/year)')
+    ax[1].ylabel('$q$ (Sv)')
 
-    return ls_min_max_1, ls_min_max_2
+    fig.tight_layout()
+
+    return fig, ax
 
 
 def plot_rhs(model, time, time_max, DeltaS_range, fig=None, ax=None):
@@ -176,13 +176,12 @@ def plot_rhs(model, time, time_max, DeltaS_range, fig=None, ax=None):
     DeltaS_range = np.arange(-3, 0, 0.01)
     _ = plot_rhs(model, time, time_max, DeltaS_range, fig=fig, ax=ax)
     """
-    is_Fs_time_dependent = False
     DeltaS_range = np.arange(-3, 0, 0.01)
     rhs = np.zeros(len(DeltaS_range))
 
     for i in range(len(DeltaS_range)):
         DeltaS = DeltaS_range[i]
-        rhs[i] = model.rhs_S(time, time_max, is_Fs_time_dependent, DeltaS=DeltaS)
+        rhs[i] = model.rhs_S(time, time_max, DeltaS=DeltaS)
 
     rhs /= np.std(rhs)
 
@@ -193,7 +192,7 @@ def plot_rhs(model, time, time_max, DeltaS_range, fig=None, ax=None):
     ax.plot(DeltaS_range, rhs * 0, 'k--', dashes=(10, 5), lw=0.5)
 
     # Superimpose color markers of the 3 solutions
-    Fs = model.Fs_func(0.0, 0.0, False)
+    Fs = model.Fs_constant(2)
     yy = model.steady_states(Fs, model.alpha * model.DeltaT) / model.beta
 
     ax.plot(yy[0], 0, 'ro', markersize=10)
@@ -206,13 +205,22 @@ def plot_rhs(model, time, time_max, DeltaS_range, fig=None, ax=None):
     return fig, ax
 
 
-def plot_time_series(model, time_max, fig=None, ax=None):
+def plot_time_series(model, time_max, forcing='sinusoidal', fig=None, ax=None):
     is_Fs_time_dependent = True
     teval = np.arange(0, time_max, time_max / 1000)
     tspan = (teval[0], teval[-1])
     
+    if forcing == 'linear':
+        fn_forcing = model.Fs_linear
+    elif forcing == 'sinusoidal':
+        fn_forcing = model.Fs_sinusoidal
+    else:
+        fn_forcing = model.constant
+    
     sol_DS = sp.integrate.solve_ivp(
-        fun=lambda time, DeltaS: model.rhs_S(time, time_max, is_Fs_time_dependent, DeltaS=DeltaS),
+        fun=lambda time, DeltaS: model.rhs_S(
+            time, time_max, fn_forcing=fn_forcing, DeltaS=DeltaS,
+        ),
         vectorized=False,
         y0=[0],
         t_span=tspan,
@@ -225,8 +233,9 @@ def plot_time_series(model, time_max, fig=None, ax=None):
     FWplot = np.zeros(len(Time_DS))
     qplot = np.zeros(len(Time_DS))
 
+
     for i, t in enumerate(Time_DS):
-        FWplot[i] = model.Fs_func(t, time_max, is_Fs_time_dependent)
+        FWplot[i] = fn_forcing(t, time_max)
         qplot[i] = model.q(model.DeltaT, DeltaS[0, i])
 
     xs = Time_DS / YEAR / 1000
