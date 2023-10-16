@@ -274,7 +274,7 @@ class GaussianPrior:
         return Normal(0, self.scale)
 
 
-class LaplacePrior(torch.nn.Module):
+class LaplacePrior(nn.Module):
     """Implements a Laplacian prior."""
     def __init__(self, module, clamp=False):
         super().__init__()
@@ -298,14 +298,14 @@ class LaplacePrior(torch.nn.Module):
             return Normal(0, self.scale ** 0.5 + 1e-8)
 
 
-class VariationalNormal(torch.nn.Module, torch.distributions.Distribution):
+class VariationalNormal(nn.Module, torch.distributions.Distribution):
     def __init__(self, loc, scale):
-        torch.nn.Module.__init__(self)
+        nn.Module.__init__(self)
 
         assert loc.shape == scale.shape
 
-        self.loc = torch.nn.Parameter(loc)
-        self.logscale = torch.nn.Parameter(torch.log(torch.exp(scale)-1))
+        self.loc = nn.Parameter(loc)
+        self.logscale = nn.Parameter(torch.log(torch.exp(scale)-1))
 
         torch.distributions.Distribution.__init__(self,batch_shape=self.loc.shape)
 
@@ -319,7 +319,7 @@ class VariationalNormal(torch.nn.Module, torch.distributions.Distribution):
         return samples
      
 
-class MC_ExpansionLayer(torch.nn.Module):
+class MC_ExpansionLayer(nn.Module):
     def __init__(self, num_MC=1, input_dim=2):
         '''
         :param num_MC: if input.dim()==input_dim, expand first dimension by num_MC
@@ -340,7 +340,7 @@ class MC_ExpansionLayer(torch.nn.Module):
         return out
 
 
-class BayesLinear(torch.nn.Module):
+class BayesLinear(nn.Module):
     """A Bayesian linear layer."""
     def __init__(self, in_features, out_features, num_MC=None, prior=1., bias=True):
         super().__init__()
@@ -373,13 +373,13 @@ class BayesLinear(torch.nn.Module):
         self.reset_parameters(scale_offset=0)
 
     def reset_parameters(self, scale_offset=0):
-        torch.nn.init.kaiming_uniform_(self.weight.loc.data, a=math.sqrt(5))
+        nn.init.kaiming_uniform_(self.weight.loc.data, a=math.sqrt(5))
         self.weight.logscale.data.fill_(torch.log(torch.exp((self.mu_init_std)/self.weight.loc.shape[1] )-1)+scale_offset)
 
         if self.bias is not None:
-            fan_in, _ = torch.nn.init._calculate_fan_in_and_fan_out(self.weight.loc.data)
+            fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weight.loc.data)
             bound = 1 / math.sqrt(fan_in)
-            torch.nn.init.uniform_(self.bias.loc.data, -bound, bound)
+            nn.init.uniform_(self.bias.loc.data, -bound, bound)
             self.bias.logscale.data.fill_(torch.log(torch.exp(self.mu_init_std)-1)+scale_offset)
 
     def forward(self, x: torch.Tensor, prior=None, stochastic=True):
