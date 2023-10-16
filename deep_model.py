@@ -1,22 +1,25 @@
-import torch
-import torch.nn as nn
-import torch.optim as optim
-import torch.nn.functional as F
-from torch.distributions import Normal, Dirichlet, Categorical, RelaxedOneHotCategorical
-from torch.distributions.utils import _standard_normal
-from torch.utils.data import TensorDataset, DataLoader
-from torchmetrics.regression import MeanSquaredError
-import numpy as np
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.neural_network import MLPRegressor
-import lightning.pytorch as pl
 import math
 from numbers import Number
+
+import lightning.pytorch as pl
 import matplotlib.pyplot as plt
-import os
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
+from sklearn.neural_network import MLPRegressor
+from sklearn.preprocessing import MinMaxScaler
+from torch.distributions import Normal
+from torch.distributions.utils import _standard_normal
+from torch.utils.data import DataLoader, TensorDataset
+from torchmetrics.regression import MeanSquaredError
 
 
 def sliding_windows(data, seq_length):
+    """
+    Transforms a 1d time series into sliding windows of length `seq_length`.
+    """
     x = []
     y = []
 
@@ -29,11 +32,12 @@ def sliding_windows(data, seq_length):
     return np.array(x), np.array(y)
 
 
-def prepare_data(train, test, seq_len=10):
-    # sc = MinMaxScaler()
-
-    # train = sc.fit_transform(train)
-    # test = sc.fit_transform(test)
+def prepare_data(train, test, seq_len, scale=False):
+    """From a train/test split, optionally scaled the data and returns sliding windows."""
+    if scale:
+        sc = MinMaxScaler()
+        train = sc.fit_transform(train)
+        test = sc.fit_transform(test)
 
     X_train, y_train = sliding_windows(train, seq_len)
     X_test, y_test = sliding_windows(test, seq_len)
@@ -45,6 +49,7 @@ def prepare_data(train, test, seq_len=10):
 
 
 class RNNModel(nn.Module):
+    """Implements a reccurent model."""
     def __init__(self,
                  num_classes,
                  input_size,
@@ -112,6 +117,7 @@ class RNNModel(nn.Module):
 
 
 class MLPModel(nn.Module):
+    """Implements a simple MLP."""
     def __init__(self,
                  input_dim,
                  hidden_dim,
@@ -138,6 +144,7 @@ class MLPModel(nn.Module):
 
 
 class BayesMLPModel(nn.Module):
+    """Implements a simple Bayesian neural network."""
     def __init__(self,
                  input_dim,
                  hidden_dim,
@@ -168,6 +175,7 @@ class BayesMLPModel(nn.Module):
 
 
 class TorchEnsemble(nn.Module):
+    """Implements a deep ensemble given a list of models."""
     def __init__(self, models):
         super().__init__()
         self.models = models
@@ -180,6 +188,7 @@ class TorchEnsemble(nn.Module):
 
 
 class Model(pl.LightningModule):
+    """A Pytorch Lightning wrapper around a torch model."""
     def __init__(self,
                  torch_model,
                  loss_fun,
@@ -256,6 +265,7 @@ class Model(pl.LightningModule):
 
 
 class GaussianPrior:
+    """Implements a Gaussian prior."""
     def __init__(self, scale):
         assert scale > 0.
         self.scale = scale
@@ -265,11 +275,7 @@ class GaussianPrior:
 
 
 class LaplacePrior(torch.nn.Module):
-    '''
-    Attach a tensor.register_hook() call to the relevant parameter
-    Store gradient and compute Laplace Approximation
-    Compute KL-Divergence
-    '''
+    """Implements a Laplacian prior."""
     def __init__(self, module, clamp=False):
         super().__init__()
 
@@ -283,13 +289,13 @@ class LaplacePrior(torch.nn.Module):
     def _save_grad(self, grad):
         self.step += 1
         bias_correction = 1 - self.beta ** self.step
-        self.scale.mul_(self.beta).add_(alpha=1-self.beta, other=(1/grad.data**2).div_(bias_correction+1e-8))
+        self.scale.mul_(self.beta).add_(alpha=1-self.beta, other=(1 / grad.data**2).div_(bias_correction+1e-8))
 
     def dist(self):
         if self.clamp:
             return Normal(0, torch.clamp(self.scale**0.5, min=1.0))
         else:
-            return Normal(0, self.scale ** 0.5+1e-8)
+            return Normal(0, self.scale ** 0.5 + 1e-8)
 
 
 class VariationalNormal(torch.nn.Module, torch.distributions.Distribution):
@@ -307,10 +313,6 @@ class VariationalNormal(torch.nn.Module, torch.distributions.Distribution):
         return Normal(self.loc, F.softplus(self.logscale))
 
     def rsample(self, sample_shape):
-        '''
-        Copied from torch.distributions.normal
-        stores eps for later access
-        '''
         shape = self._extended_shape(sample_shape)
         self.eps = _standard_normal(shape, dtype=self.loc.dtype, device=self.loc.device)
         samples = self.loc + self.eps * F.softplus(self.logscale)
@@ -339,6 +341,7 @@ class MC_ExpansionLayer(torch.nn.Module):
 
 
 class BayesLinear(torch.nn.Module):
+    """A Bayesian linear layer."""
     def __init__(self, in_features, out_features, num_MC=None, prior=1., bias=True):
         super().__init__()
 
@@ -358,9 +361,9 @@ class BayesLinear(torch.nn.Module):
         else:
             self.bias = None
 
-        if prior=='laplace':
+        if prior == 'laplace':
             self.prior = LaplacePrior(module=self)
-        elif prior=='laplace_clamp':
+        elif prior == 'laplace_clamp':
             self.prior = LaplacePrior(module=self, clamp=True)
         elif isinstance(float(prior), Number):
             self.prior = GaussianPrior(scale=prior)
@@ -416,32 +419,24 @@ class BayesLinear(torch.nn.Module):
         return f'BayesLinear(in_features={self.dim_input}, out_features={self.dim_output}'
 
 
-def bnn_train(bnn, X_train, y_train, X_test):
-    nuts_kernel = NUTS(bnn, jit_compile=True)
-    mcmc = MCMC(nuts_kernel, num_samples=50)
-
-    mcmc.run(X_train, y_train)
-
-    predictive = Predictive(model=bnn, posterior_samples=mcmc.get_samples())
-    # x_test = torch.linspace(xlims[0], xlims[1], 3000)
-    preds = predictive(X_test)
-    return preds
-
-
-def simple_mlp():
-    net = MLPRegressor([64, 64],
-                       max_iter=3000,
-                       alpha=1e-3,
-                       learning_rate_init=1e-4,
-                       batch_size=32)
+def sklearn_mlp(cfg):
+    net = MLPRegressor(
+        **cfg,
+        # hidden_layer_sizes=[64, 64],
+        # max_iter=3000,
+        # alpha=1e-3,
+        # learning_rate_init=1e-4,
+        # batch_size=32,
+    )
     return net
 
 
 def sklearn_train(X_train, y_train, X_test, y_test):
+    """Trains a scikit-learn model given a configuration."""
     n_models = 10
 
     if n_models > 0:
-        nets = [simple_mlp() for _ in range(n_models)]
+        nets = [sklearn_mlp() for _ in range(n_models)]
 
         for i in range(n_models):
             nets[i] = nets[i].fit(X_train, y_train)
@@ -457,10 +452,7 @@ def sklearn_train(X_train, y_train, X_test, y_test):
         test_preds_mean = preds.mean(axis=1)
         test_preds_std = 2 * preds.std(axis=1)
     else:
-        net = simple_mlp(X_train,
-                         y_train,
-                         X_test,
-                         y_test)
+        net = sklearn_mlp()
         net = net.fit(X_train, y_train)
         train_pred = net.predict(X_train)
         test_pred = net.predict(X_test)
@@ -507,6 +499,7 @@ def pytorch_train(
         X_test, y_test,
         cfg,
     ):
+    """Trains a torch model given a training configuration."""
     model_type = cfg['model_type']
 
     if model_type == 'ensemble':
@@ -541,12 +534,11 @@ def pytorch_train(
     train_set = TensorDataset(X_train, y_train)
     test_set = TensorDataset(X_test, y_test)
 
-    # num_workers = os.cpu_count()
     train_loader = DataLoader(
-        train_set, batch_size=cfg['batch_size'], #num_workers=num_workers,
+        train_set, batch_size=cfg['batch_size'],
     )
     test_loader = DataLoader(
-        test_set, batch_size=cfg['batch_size'], #num_workers=num_workers,
+        test_set, batch_size=cfg['batch_size'],
     )
 
     trainer = pl.Trainer(

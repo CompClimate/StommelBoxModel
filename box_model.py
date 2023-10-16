@@ -1,14 +1,16 @@
+import matplotlib.pyplot as plt
 import numpy as np
 import scipy as sp
-import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, PillowWriter
-
 
 YEAR = 365 * 24 * 3600
 Sv = 1.e9 # m^3/sec
 
 
 class BoxModel:
+    """
+    Implementation of Stommel's box model.
+    """
     def __init__(self, S0, S1, S2, T0, T1, T2, alpha, beta, k, area, depth):
         self.S0 = S0
         self.S1 = S1

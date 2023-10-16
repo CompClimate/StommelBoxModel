@@ -1,11 +1,12 @@
-import numpy as np
-import matplotlib.pyplot as plt
-from sklearn.model_selection import train_test_split
-import box_model, deep_model
-from deep_model import sliding_windows
 import hydra
+import matplotlib.pyplot as plt
+import numpy as np
 from omegaconf import DictConfig, OmegaConf
+from sklearn.model_selection import train_test_split
 
+import box_model
+import deep_model
+from deep_model import sliding_windows
 
 plt.rcParams.update({
     'text.usetex': True,
