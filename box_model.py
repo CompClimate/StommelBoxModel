@@ -205,8 +205,9 @@ def plot_rhs(model, time, time_max, DeltaS_range, fig=None, ax=None):
     return fig, ax
 
 
-def plot_time_series(model, time_max, forcing='sinusoidal', fig=None, ax=None):
-    is_Fs_time_dependent = True
+def get_time_series(
+        model, time_max, forcing='sinusoidal', fig=None, ax=None,
+    ):
     teval = np.arange(0, time_max, time_max / 1000)
     tspan = (teval[0], teval[-1])
     
@@ -232,7 +233,6 @@ def plot_time_series(model, time_max, forcing='sinusoidal', fig=None, ax=None):
 
     FWplot = np.zeros(len(Time_DS))
     qplot = np.zeros(len(Time_DS))
-
 
     for i, t in enumerate(Time_DS):
         FWplot[i] = fn_forcing(t, time_max)
@@ -276,7 +276,7 @@ def animation(filename, fig, ax, model, time_max):
 
     def animate(i):
         ax.clear()
-        _, _, artists = plot_time_series(model, time_max, fig=fig, ax=ax)
+        _, _, artists = get_time_series(model, time_max, fig=fig, ax=ax)
         # model.T2 += 0.1
         model.T2 = sin_range[i]
         ax.set_title(f'\(T_1 = {model.T1}\), \(T_2 = {model.T2}\)')

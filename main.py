@@ -23,13 +23,13 @@ def main(cfg: DictConfig):
     )
 
     fig, ax = None, None
-    _, _, F, X, y = box_model.plot_time_series(
+    _, _, F, X, y = box_model.get_time_series(
         model, time_max, fig=fig, ax=ax,
     )
 
     X, y = X.astype(np.float32), y.astype(np.float32)
     X, y = sliding_windows(y, seq_length=cfg['data']['seq_len'])
-    
+
     X_train, X_test, y_train_, y_test_ = \
         train_test_split(
             X, y, test_size=cfg['data']['test_size'], shuffle=False,
