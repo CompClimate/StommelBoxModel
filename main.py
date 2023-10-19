@@ -10,6 +10,10 @@ from deep_model import sliding_windows
 
 plt.rcParams.update({
     'text.usetex': True,
+	'text.latex.preamble': r"""
+\usepackage{amsmath}
+\usepackage{amssymb}
+"""
 })
 
 

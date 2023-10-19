@@ -17,6 +17,7 @@ data:
 
 model:
   model_type: bayes_mlp
+  explain_after_train: True
   seq_len: *seq_len
   num_models: 20
   num_epochs: 50
