@@ -55,7 +55,7 @@ def explain_captum(model, attr_algorithm_cls, X, n_features, **kwargs):
 
 def heatmap(attr_values, instance_order=Explanation.hclust(), feature_values=Explanation.abs.mean(0),
             feature_order=None, max_display=10, cmap=colors.red_white_blue, show=True,
-            plot_width=8, ylabel='Attribution Value'):
+            plot_width=8, xlabel='\(t\)', ylabel='Attribution Value'):
     # sort the SHAP values matrix by rows and columns
     values = attr_values.values
     if issubclass(type(feature_values), OpChain):
@@ -68,7 +68,6 @@ def heatmap(attr_values, instance_order=Explanation.hclust(), feature_values=Exp
         feature_order = feature_order.apply(Explanation(values))
     elif not hasattr(feature_order, "__len__"):
         raise Exception("Unsupported feature_order: %s!" % str(feature_order))
-    xlabel = "Instances"
     instance_order = convert_ordering(instance_order, attr_values)
     # if issubclass(type(instance_order), OpChain):
     #     #xlabel += " " + instance_order.summary_string("SHAP values")

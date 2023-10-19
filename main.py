@@ -28,7 +28,7 @@ def main(cfg: DictConfig):
 
     fig, ax = None, None
     _, _, F, X, y = box_model.get_time_series(
-        model, time_max, fig=fig, ax=ax,
+        model, time_max, forcing=cfg['data'].get('forcing', 'sinusoidal'), fig=fig, ax=ax,
     )
 
     X, y = X.astype(np.float32), y.astype(np.float32)

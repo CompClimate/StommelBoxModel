@@ -14,9 +14,11 @@ box_model:
 data:
   seq_len: &seq_len 10
   test_size: 0.3
+  forcing: linear
 
 model:
   model_type: bayes_mlp
+  recurrent_type: lstm
   explain_after_train: True
   seq_len: *seq_len
   num_models: 20

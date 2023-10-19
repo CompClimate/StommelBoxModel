@@ -49,35 +49,42 @@ def prepare_data(train, test, seq_len, scale=False):
 class RNNModel(nn.Module):
     """Implements a reccurent model."""
     def __init__(self,
-                 num_classes,
                  input_size,
                  hidden_size,
+                 output_size,
                  num_layers,
-                 seq_len,
+                 recurrent_type='rnn',
                  rnn_dropout=0.3,
                  bidirectional=False,
                  quantify_uncertainty=0.0):
         super().__init__()
         
-        self.num_classes = num_classes
+        self.output_size = output_size
         self.num_layers = num_layers
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.rnn_dropout = rnn_dropout
         self.bidirectional = bidirectional
-        self.seq_len = seq_len
         self.quantify_uncertainty = quantify_uncertainty
         
-        self.rnn = nn.LSTM(input_size=input_size,
-                            hidden_size=hidden_size,
-                            num_layers=num_layers,
-                            batch_first=True,
-                            dropout=rnn_dropout,
-                            bidirectional=bidirectional)
-        if quantify_uncertainty > 0.0:
-            self.init_second_rnn_()
+        if recurrent_type == 'rnn':
+            rnn_cls = nn.RNN
+        elif recurrent_type == 'lstm':
+            rnn_cls = nn.LSTM
+        elif recurrent_type == 'gru':
+            rnn_cls = nn.GRU
+
+        self.rnn = rnn_cls(input_size=input_size,
+                           hidden_size=hidden_size,
+                           num_layers=num_layers,
+                           batch_first=True,
+                           dropout=rnn_dropout,
+                           bidirectional=bidirectional)
+        # if quantify_uncertainty > 0.0:
+            # self.init_second_rnn_()
         self.fc = nn.Linear(hidden_size * 2 if bidirectional else hidden_size,
-                            num_classes)
+                            output_size)
+        self.explain_mode = False
 
     def init_second_rnn_(self):
         self.rnn2 = nn.LSTM(input_size=self.hidden_size,
@@ -90,14 +97,19 @@ class RNNModel(nn.Module):
     def forward(self, x):
         x, _ = self.rnn(x)
 
-        if self.quantify_uncertainty > 0.0:
-            x = F.dropout(x, self.quantify_uncertainty, training=True)
-            x, _ = self.rnn2(x)
-            x = F.dropout(x, self.quantify_uncertainty, training=True)
+        # if self.quantify_uncertainty > 0.0:
+        #     x = F.dropout(x, self.quantify_uncertainty, training=True)
+        #     x, _ = self.rnn2(x)
+        #     x = F.dropout(x, self.quantify_uncertainty, training=True)
 
-        x = x[:, -1, :]
-        out = self.fc(x)
-        return out
+        # x = x[:, -1, :]
+
+        x = self.fc(x)
+        mu, std = x, torch.zeros_like(x)
+        if self.explain_mode:
+            return mu.unsqueeze(-1)
+        else:
+            return mu, std
 
     @torch.no_grad()
     def quantify(self, x, p, k):
@@ -139,6 +151,25 @@ class MLPModel(nn.Module):
         x = self.hidden_layers(x)
         x = self.output_block(x)
         return x
+    
+
+class ConvModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.explain_mode = False
+        self.input_block = nn.Conv1d(1, 16, 3)
+        self.hidden_layers = nn.Conv1d(16, 16, 3)
+        self.output_block = nn.Linear(6, 1)
+
+    def forward(self, x):
+        x = self.input_block(x.unsqueeze(1))
+        x = self.hidden_layers(x)
+        x = self.output_block(x)
+        mu, std = x.mean(dim=1), x.std(dim=1)
+        if self.explain_mode:
+            return mu.unsqueeze(-1)
+        else:
+            return mu, std
 
 
 class BayesMLPModel(nn.Module):
@@ -294,6 +325,16 @@ def pytorch_train(
             cfg['seq_len'],
             cfg['hidden_size'],
             cfg['num_layers'],
+        )
+    elif model_type == 'conv':
+        torch_model = ConvModel()
+    elif model_type == 'rnn':
+        torch_model = RNNModel(
+            cfg['seq_len'],
+            cfg['hidden_size'],
+            1,
+            cfg['num_layers'],
+            recurrent_type=cfg['recurrent_type'],
         )
 
     criterion = nn.MSELoss()
