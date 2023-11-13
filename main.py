@@ -6,7 +6,6 @@ from sklearn.model_selection import train_test_split
 
 import box_model
 import deep_model
-from deep_model import sliding_windows
 
 plt.rcParams.update({
     'text.usetex': True,
@@ -27,19 +26,38 @@ def main(cfg: DictConfig):
     )
 
     fig, ax = None, None
-    _, _, F, X, y = box_model.get_time_series(
-        model, time_max, forcing=cfg['data'].get('forcing', 'sinusoidal'), fig=fig, ax=ax,
+    _, _, F, DeltaS, DeltaT, q = box_model.get_time_series(
+        model,
+        time_max,
+        forcing=cfg['data'].get('forcing', 'sinusoidal'),
+        forcing_kwargs=cfg['data'].get('forcing_kwargs', dict()),
+        fig=fig,
+        ax=ax,
     )
 
+    feats = {
+        'F': F,
+        'DeltaS': DeltaS,
+        'DeltaT': DeltaT,
+    }
+
+    if cfg['model']['return_plot']:
+        plt.show()
+
+    X = np.hstack(
+        [feats[name].reshape(-1, 1) for name in cfg['data']['input_features']]
+    )
+    y = q
+
     X, y = X.astype(np.float32), y.astype(np.float32)
-    X, y = sliding_windows(y, seq_length=cfg['data']['seq_len'])
 
     X_train, X_test, y_train_, y_test_ = \
         train_test_split(
             X, y, test_size=cfg['data']['test_size'], shuffle=False,
         )
 
-    deep_model.pytorch_train(
+    cfg['model']['input_dim'] = len(cfg['data']['input_features'])
+    deep_model.train(
         X_train, y_train_,
         X_test, y_test_,
         cfg['model'],

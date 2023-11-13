@@ -8,6 +8,9 @@ from torch.distributions import Normal
 from torch.distributions.utils import _standard_normal
 from captum.attr._utils.lrp_rules import EpsilonRule
 
+EPS = torch.finfo(torch.float32).eps
+# EPS = 1e-10
+
 
 class GaussianPrior:
     """Implements a Gaussian prior."""
@@ -59,7 +62,7 @@ class VariationalNormal(nn.Module, torch.distributions.Distribution):
         torch.distributions.Distribution.__init__(self,batch_shape=self.loc.shape)
 
     def dist(self):
-        return Normal(self.loc, F.softplus(self.logscale))
+        return Normal(self.loc.clamp(min=EPS), F.softplus(self.logscale).clamp(min=EPS))
 
     def rsample(self, sample_shape):
         shape = self._extended_shape(sample_shape)

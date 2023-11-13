@@ -1,7 +1,11 @@
+from functools import partial
+
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy as sp
 from matplotlib.animation import FuncAnimation, PillowWriter
+
+from utils import combine_forcing
 
 # Constants
 YEAR = 365 * 24 * 3600
@@ -78,21 +82,28 @@ class BoxModel:
         Y = np.array([y1, y2, y3])
         return Y
 
-    def Fs_constant(self, time, time_max, flux=2):
+    def Fs_constant(self, time, time_max, flux=2, period=20, FW_min=-0.1, FW_max=5):
         return flux * self.area * self.S0 / YEAR
 
-    def Fs_linear(self, time, time_max, FW_min=-0.1, FW_max=5):
+    def Fs_linear(self, time, time_max, period=20, FW_min=-0.1, FW_max=5):
         # Linear interpolation between minimum F and maximum F
         flux = FW_min + (FW_max - FW_min) * time / time_max
         return flux * self.area * self.S0 / YEAR
     
-    def Fs_sinusoidal(self, time, time_max, FW_min=-0.1, FW_max=5):
+    def Fs_sinusoidal(self, time, time_max, period=20, FW_min=-5, FW_max=5):
         # Sinusoidal interpolation between minimum F and maximum F
         half_range = (FW_max - FW_min) / 2
-        flux = FW_min + half_range + np.sin(13 * time / time_max) * half_range
-        return flux * self.area * self.S0 / YEAR
+        amplitude_mult = time / time_max
+        flux = FW_min + half_range + np.sin(period * time / time_max) * half_range
+        ret = amplitude_mult * flux * self.area * self.S0 / YEAR
+        return ret
     
-    def rhs_S(self, time, time_max, fn_forcing=None, DeltaT=None, DeltaS=None):
+    def Fs_meta(self, time, time_max, ls_F_type, ls_F_length, combination=None):
+        if combination is None:
+            combination = combine_forcing(0, time_max, ls_F_type, ls_F_length)
+        return combination[int(time)]
+
+    def rhs_S(self, time, time_max, fn_forcing=None, forcing_kwargs=dict(), DeltaT=None, DeltaS=None):
         """
         Implements the right-hand side of the derivative of S wrt. t (time).
         """
@@ -102,10 +113,27 @@ class BoxModel:
         DeltaT = self.DeltaT if DeltaT is None else DeltaT
         DeltaS = self.DeltaS if DeltaS is None else DeltaS
         
-        F_s = fn_forcing(time, time_max)
+        F_s = fn_forcing(time, time_max, **forcing_kwargs)
         # Optional: with S0
         # rhs = -(2 * abs(self.q(DeltaT, DeltaS)) * DeltaS + 2 * F_s * self.S0)
         rhs = -(2 * abs(self.q(DeltaT, DeltaS)) * DeltaS + 2 * F_s)
+
+        return rhs / self.V
+    
+    def rhs_T(self, time, time_max, fn_forcing=None, forcing_kwargs=dict(), DeltaT=None, DeltaS=None):
+        """
+        Implements the right-hand side of the derivative of T wrt. t (time).
+        """
+        if fn_forcing is None:
+            fn_forcing = self.Fs_sinusoidal
+
+        DeltaT = self.DeltaT if DeltaT is None else DeltaT
+        DeltaS = self.DeltaS if DeltaS is None else DeltaS
+        
+        F_s = fn_forcing(time, time_max, **forcing_kwargs)
+        # Optional: with S0
+        # rhs = -(2 * abs(self.q(DeltaT, DeltaS)) * DeltaS + 2 * F_s * self.S0)
+        rhs = -(2 * abs(self.q(DeltaT, DeltaS)) * DeltaT + 2 * F_s)
 
         return rhs / self.V
 
@@ -206,7 +234,7 @@ def plot_rhs(model, time, time_max, DeltaS_range, fig=None, ax=None):
 
 
 def get_time_series(
-        model, time_max, forcing='sinusoidal', fig=None, ax=None,
+        model, time_max, forcing='sinusoidal', forcing_kwargs=dict(), fig=None, ax=None,
     ):
     teval = np.arange(0, time_max, time_max / 1000)
     tspan = (teval[0], teval[-1])
@@ -215,12 +243,26 @@ def get_time_series(
         fn_forcing = model.Fs_linear
     elif forcing == 'sinusoidal':
         fn_forcing = model.Fs_sinusoidal
-    else:
-        fn_forcing = model.constant
-    
+    elif forcing == 'constant':
+        fn_forcing = model.Fs_constant
+    elif forcing == 'meta':
+        ls_F_type = ['s']
+        ls_F_length = [time_max]
+        combination = combine_forcing(0, time_max, ls_F_type, ls_F_length)
+        fn_forcing = partial(
+            model.Fs_meta,
+            ls_F_type=ls_F_type,
+            ls_F_length=ls_F_length,
+            combination=combination,
+        )
+
     sol_DS = sp.integrate.solve_ivp(
         fun=lambda time, DeltaS: model.rhs_S(
-            time, time_max, fn_forcing=fn_forcing, DeltaS=DeltaS,
+            time,
+            time_max,
+            fn_forcing=fn_forcing,
+            forcing_kwargs=forcing_kwargs,
+            DeltaS=DeltaS,
         ),
         vectorized=False,
         y0=[0],
@@ -228,46 +270,69 @@ def get_time_series(
         t_eval=teval,
         dense_output=True,
     )
-    Time_DS = sol_DS.t
-    DeltaS = sol_DS.y
+
+    sol_DT = sp.integrate.solve_ivp(
+        fun=lambda time, DeltaT: model.rhs_T(
+            time,
+            time_max,
+            fn_forcing=fn_forcing,
+            forcing_kwargs=forcing_kwargs,
+            DeltaT=DeltaT,
+        ),
+        vectorized=False,
+        y0=[0],
+        t_span=tspan,
+        t_eval=teval,
+        dense_output=True,
+    )
+
+    Time_DS, Time_DT = sol_DS.t, sol_DT.t
+    DeltaS, DeltaT = sol_DS.y[0, :], sol_DT.y[0, :]
 
     FWplot = np.zeros(len(Time_DS))
     qplot = np.zeros(len(Time_DS))
 
     for i, t in enumerate(Time_DS):
-        FWplot[i] = fn_forcing(t, time_max)
-        qplot[i] = model.q(model.DeltaT, DeltaS[0, i])
+        FWplot[i] = fn_forcing(t, time_max, **forcing_kwargs)
+        # qplot[i] = model.q(model.DeltaT, DeltaS[0, i])
+        qplot[i] = model.q(DeltaT[i], DeltaS[i])
 
-    xs = Time_DS / YEAR / 1000
+    xs_S = Time_DS / YEAR / 1000
+    xs_T = Time_DT / YEAR / 1000
 
     if (fig, ax) == (None, None):
-        fig, ax = plt.subplots(ncols=3, figsize=(9, 7))
+        fig, ax = plt.subplots(ncols=4, figsize=(9, 7))
 
     F = FWplot / Fs_to_m_per_year(model.S0, model.area)
-    ax[0].plot(xs, F, 'b-', markersize=1)
-    ax[0].plot(xs, Time_DS*0, 'k--', dashes=(10, 5), linewidth=0.5)
+    ax[0].plot(xs_S, F, 'b-', markersize=1)
+    ax[0].plot(xs_S, Time_DS*0, 'k--', dashes=(10, 5), linewidth=0.5)
     ax[0].set_xlabel('Time (kyr)')
     ax[0].set_ylabel('$F$ (m/yr)')
     ax[0].set_title('Forcing')
 
     y = qplot / Sv
-    ax[1].plot(xs, y, 'b-', markersize=1)
-    ax[1].plot(xs, Time_DS*0, 'k--', dashes=(10, 5), lw=0.5)
+    ax[1].plot(xs_S, y, 'b-', markersize=1)
+    ax[1].plot(xs_S, Time_DS*0, 'k--', dashes=(10, 5), lw=0.5)
     ax[1].set_xlabel('Time (kyr)')
     ax[1].set_ylabel('$q$ (Sv)')
     ax[1].set_title('THC transport')
 
-    ax[2].plot(xs, DeltaS[0, :], 'b-', markersize=1)
-    ax[2].plot(xs, Time_DS*0, 'k--', dashes=(10, 5), lw=0.5)
+    ax[2].plot(xs_S, DeltaS, 'b-', markersize=1)
+    ax[2].plot(xs_S, Time_DS*0, 'k--', dashes=(10, 5), lw=0.5)
     ax[2].set_title('$\Delta S$ vs time')
     ax[2].set_xlabel('Time (kyr)')
     ax[2].set_ylabel('$\Delta S$')
 
+    ax[3].plot(xs_T, DeltaT, 'b-', markersize=1)
+    ax[3].plot(xs_T, Time_DT*0, 'k--', dashes=(10, 5), lw=0.5)
+    ax[3].set_title('$\Delta T$ vs time')
+    ax[3].set_xlabel('Time (kyr)')
+    ax[3].set_ylabel('$\Delta T$')
+
     fig.tight_layout()
 
-    X = xs
+    return fig, ax, F, DeltaS, DeltaT, y
 
-    return fig, ax, F, X, y
 
 
 def animation(filename, fig, ax, model, time_max):

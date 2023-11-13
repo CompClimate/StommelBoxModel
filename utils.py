@@ -5,6 +5,8 @@ from shap.plots import colors
 from shap.plots._utils import convert_ordering
 import numpy as np
 import matplotlib.pyplot as pl
+from tqdm import tqdm
+from lightning.pytorch.callbacks import Callback
 
 
 class explain_mode:
@@ -16,6 +18,60 @@ class explain_mode:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.model.explain_mode = False
+
+
+def combine_forcing(time_0, time_max, ls_F_type, ls_F_length, step=150):
+    area = 2500000000000000
+    S0 = 35.0
+    year = 365 * 24 * 3600
+
+    def Fs_constant(time, time_max, flux=2):
+        return flux * area * S0 / year
+
+    def Fs_linear(time, time_max, FW_min=-0.1, FW_max=5):
+        # Linear interpolation between minimum F and maximum F
+        flux = FW_min + (FW_max - FW_min) * time / time_max
+        return flux * area * S0 / year
+    
+    def Fs_sinusoidal(time, time_max, FW_min=-0.1, FW_max=5):
+        # Sinusoidal interpolation between minimum F and maximum F
+        half_range = (FW_max - FW_min) / 2
+        flux = FW_min + half_range + np.sin(13 * time / time_max) * half_range
+        return flux * area * S0 / year
+
+    assert len(ls_F_type) == len(ls_F_length)
+    assert time_max - time_0 == sum(ls_F_length)
+
+    combined = []
+
+    last_t = time_0
+    last_F = None
+    for i, (F_type, F_length) in enumerate(zip(ls_F_type, ls_F_length)):
+        if F_type == 'c':
+            func = Fs_constant
+        elif F_type == 'l':
+            func = Fs_linear
+        elif F_type == 's':
+            func = Fs_sinusoidal
+
+        diff = None
+        for k in tqdm(range(0, F_length, step)):
+            F = func(last_t + k, time_max)
+            
+            if i > 0:
+                if k == 0:
+                    diff = last_F - F
+                F += diff
+            
+            combined.append(F)
+
+        last_F = combined[-1]
+        last_t += F_length
+
+    # pl.plot(combined)
+    # pl.show()
+
+    return combined
 
 
 def explain(model, X, n_features):
@@ -34,7 +90,7 @@ def explain(model, X, n_features):
     return shap_values
 
 
-def explain_captum(model, attr_algorithm_cls, X, n_features, **kwargs):
+def explain_captum(model, attr_algorithm_cls, X, feature_names, **kwargs):
     # ig = attr.IntegratedGradients(model)
     # ig_nt = attr.NoiseTunnel(ig)
     # dl = attr.DeepLift(model)
@@ -47,10 +103,13 @@ def explain_captum(model, attr_algorithm_cls, X, n_features, **kwargs):
     # fa_attr_test = fa.attribute(X_test)
 
     attr_alg = attr_algorithm_cls(model)
-    attrs = attr_alg.attribute(X, **kwargs)
+    attrs = attr_alg.attribute(X, **kwargs).cpu().detach()
 
-    features = [f'\(t - {i}\)' for i in reversed(range(1, n_features + 1))]
-    return shap.Explanation(values=attrs, data=X, feature_names=features)
+    # attr_alg = shap.explainers.KernelExplainer(model, X, feature_names=feature_names)
+    # attrs = attr_alg.shap_values(X)
+    # return attrs
+
+    return shap.Explanation(values=attrs, data=X, feature_names=feature_names)
 
 
 def heatmap(attr_values, instance_order=Explanation.hclust(), feature_values=Explanation.abs.mean(0),
@@ -126,7 +185,7 @@ def heatmap(attr_values, instance_order=Explanation.hclust(), feature_values=Exp
     heatmap_yticks_labels = feature_names
     ax.yaxis.set_ticks(
         [-1.5, *heatmap_yticks_pos],
-        [r"\(\small{\underset{k}{\mathbb{E}}[\text{Attr}(t - k)]}\)", *heatmap_yticks_labels],
+        [r"\(\small{\mathbb{E}[\text{Attr}]}\)", *heatmap_yticks_labels],
         fontsize=13,
     )
     # remove the y-tick line for the f(x) label
@@ -179,3 +238,11 @@ def heatmap(attr_values, instance_order=Explanation.hclust(), feature_values=Exp
 
     if show:
         pl.show()
+
+
+class BiasCallback(Callback):
+    def on_train_start(self, trainer, pl_module):
+        print("Training is starting")
+
+    def on_train_end(self, trainer, pl_module):
+        print("Training is ending")

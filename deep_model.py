@@ -9,6 +9,9 @@ import torch.optim as optim
 from sklearn.preprocessing import MinMaxScaler
 from torch.utils.data import DataLoader, TensorDataset
 from torchmetrics.regression import MeanSquaredError
+import ruptures as rpt
+import copy
+from landscape import RandomCoordinates, PCACoordinates, LossSurface
 
 import bayes_layer as bl
 from utils import explain_captum, heatmap, explain_mode
@@ -145,12 +148,16 @@ class MLPModel(nn.Module):
         ] * n_hidden
         self.hidden_layers = nn.Sequential(*self.hidden_layers)
         self.output_block = nn.Linear(hidden_dim, 1)
+        self.explain_mode = False
 
     def forward(self, x):
         x = self.input_block(x)
         x = self.hidden_layers(x)
         x = self.output_block(x)
-        return x
+        if self.explain_mode:
+            return x.unsqueeze(-1)
+        else:
+            return x, torch.zeros_like(x)
     
 
 class ConvModel(nn.Module):
@@ -212,12 +219,17 @@ class TorchEnsemble(nn.Module):
     def __init__(self, models):
         super().__init__()
         self.models = models
+        self.explain_mode = False
         for i, model in enumerate(self.models):
             self.register_module(f'model_{i}', model)
 
     def forward(self, x):
-        preds = torch.hstack([model(x) for model in self.models])
-        return preds.mean(dim=-1), preds.std(dim=-1)
+        preds = torch.hstack([model(x)[0] for model in self.models])
+        mu, std = preds.mean(dim=-1), preds.std(dim=-1)
+        if self.explain_mode:
+            return mu.unsqueeze(-1)
+        else:
+            return mu, std
 
 
 class Model(pl.LightningModule):
@@ -227,7 +239,8 @@ class Model(pl.LightningModule):
                  loss_fun,
                  lr,
                  alpha=1e-3,
-                 lr_scheduler=None):
+                 lr_scheduler=None,
+                 log_bias=False):
         super().__init__()
         self.model = torch_model
         self.loss_fun = loss_fun
@@ -236,6 +249,7 @@ class Model(pl.LightningModule):
         self.lr_scheduler = lr_scheduler
         self.train_loss = MeanSquaredError()
         self.val_loss = MeanSquaredError()
+        self.log_bias = log_bias
 
     def forward(self, x):
         return self.model.forward(x)
@@ -259,6 +273,17 @@ class Model(pl.LightningModule):
             sync_dist=True,
         )
 
+        if self.log_bias:
+            bias = (pred - y).mean()
+            self.log(
+                'train_bias',
+                bias,
+                on_step=False,
+                on_epoch=True,
+                prog_bar=True,
+                sync_dist=True,
+            )
+
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -280,6 +305,17 @@ class Model(pl.LightningModule):
             sync_dist=True,
         )
 
+        if self.log_bias:
+            bias = (pred - y).mean()
+            self.log(
+                'train_bias',
+                bias,
+                on_step=False,
+                on_epoch=True,
+                prog_bar=True,
+                sync_dist=True,
+            )
+
         return loss
 
     def configure_optimizers(self):
@@ -297,7 +333,7 @@ class Model(pl.LightningModule):
         return optimizer
 
 
-def pytorch_train(
+def train(
         X_train, y_train,
         X_test, y_test,
         cfg,
@@ -308,21 +344,21 @@ def pytorch_train(
     if model_type == 'ensemble':
         torch_model = TorchEnsemble([
             MLPModel(
-                cfg['seq_len'],
+                cfg['input_dim'],
                 cfg['hidden_size'],
                 cfg['num_layers'],
             ) for _ in range(cfg['num_models'])
         ])
     elif model_type == 'bayes_mlp':
         torch_model = BayesMLPModel(
-            cfg['seq_len'],
+            cfg['input_dim'],
             cfg['hidden_size'],
             cfg['num_layers'],
             num_MC=cfg['num_models'],
         )
     elif model_type == 'mlp':
         torch_model = MLPModel(
-            cfg['seq_len'],
+            cfg['input_dim'],
             cfg['hidden_size'],
             cfg['num_layers'],
         )
@@ -330,7 +366,7 @@ def pytorch_train(
         torch_model = ConvModel()
     elif model_type == 'rnn':
         torch_model = RNNModel(
-            cfg['seq_len'],
+            cfg['input_dim'],
             cfg['hidden_size'],
             1,
             cfg['num_layers'],
@@ -363,16 +399,34 @@ def pytorch_train(
         criterion,
         cfg['lr'],
         alpha=cfg['l2_alpha'],
+        log_bias=cfg['compute_bias'],
     )
 
     trainer.fit(pl_model,
                 train_dataloaders=train_loader,
                 val_dataloaders=test_loader)
 
+    pcoords = RandomCoordinates(copy.deepcopy(list(pl_model.parameters())))
+    loss_surface = LossSurface(pl_model, X_train, y_train)
+    
+    # c_range = 1
+    # loss_surface.compile(
+    #     points=100,
+    #     coords=pcoords,
+    #     range_=c_range,
+    #     loss_fun=criterion,
+    #     surf=False,
+    #     device='mps',
+    # )
+    # _, ax = loss_surface.plot('Loss Landscape')
+    # # plt.ylim((0, 50))
+    # plt.show()
+
     if cfg['return_plot']:
         pl_model.eval()
 
         with torch.no_grad():
+            pl_model = pl_model.to('cpu')
             train_pred_mean, train_pred_std = pl_model(X_train)
             train_pred_mean = train_pred_mean.view(-1)
             train_pred_std = train_pred_std.view(-1)
@@ -380,6 +434,10 @@ def pytorch_train(
             test_pred_mean, test_pred_std = pl_model(X_test)
             test_pred_mean = test_pred_mean.view(-1)
             test_pred_std = test_pred_std.view(-1)
+
+        if cfg['show_change_points']:
+            algo = rpt.Pelt(model='rbf').fit(y_test)
+            result = algo.predict(pen=10)
 
         fig, ax = plt.subplots(ncols=2)
 
@@ -402,16 +460,34 @@ def pytorch_train(
             test_pred_mean + test_pred_std,
             alpha=0.3,
         )
+        if cfg['show_change_points']:
+            ax[1].vlines(result, y_test.min(), y_test.max(), ls='--')
         ax[1].set_title('Test Set')
         ax[1].legend()
 
         if cfg['explain_after_train']:
             with explain_mode(pl_model.model):
                 attrs = explain_captum(
-                    pl_model, attr.Saliency, X_test, cfg['seq_len'],
+                    pl_model.model,
+                    # attr.Saliency, 
+                    attr.ShapleyValues,
+                    # attr.LRP,
+                    X_test,
+                    cfg['feature_names'],
                 )
 
             plt.subplots()
-            heatmap(attrs, ylabel='Saliency')
+            heatmap(attrs, ylabel='Shapley Values')
+
+        if cfg['compute_bias']:
+            with torch.no_grad():
+                train_bias = pl_model(X_train)[0] - y_train
+                test_bias = pl_model(X_test)[0] - y_test
+
+            _, ax_bias = plt.subplots(ncols=2)
+            ax_bias[0].plot(train_bias)
+            ax_bias[0].set_title('Training Bias')
+            ax_bias[1].plot(test_bias)
+            ax_bias[1].set_title('Test Bias')
 
         return fig, ax
