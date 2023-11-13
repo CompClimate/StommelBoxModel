@@ -67,3 +67,5 @@ lightning_logs/
 venv/
 
 outputs/
+
+.DS_STORE
