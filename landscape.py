@@ -22,30 +22,25 @@ class RandomCoordinates:
     """
     Implements the random coordinates approach for Loss Landscape Visualization.
     """
+
     def __init__(self, origin, dim=2):
         self.origin_ = origin
         self.dim = dim
         self.v0_ = normalize_weights(
-            [np.random.normal(size=w.shape)
-             for w in origin], origin
+            [np.random.normal(size=w.shape) for w in origin], origin
         )
         self.v1_ = normalize_weights(
-            [np.random.normal(size=w.shape)
-             for w in origin], origin
+            [np.random.normal(size=w.shape) for w in origin], origin
         )
 
     def __call__(self, a, b=None):
         if self.dim == 3:
             return [
                 a * w0 + b * w1 + wc
-                for w0, w1, wc in zip(self.v0_,
-                                      self.v1_,
-                                      self.origin_)
+                for w0, w1, wc in zip(self.v0_, self.v1_, self.origin_)
             ]
         elif self.dim == 2:
-            return [
-                a * w0 + wc for w0, wc in zip(self.v0_, self.origin_)
-            ]
+            return [a * w0 + wc for w0, wc in zip(self.v0_, self.origin_)]
 
 
 @torch.no_grad()
@@ -66,7 +61,7 @@ def vectorize_weights_(weights):
     vec = [
         t.cpu().clone().detach().numpy()
         if isinstance(t, torch.Tensor)
-        else torch.tensor(t, device='cpu').numpy()
+        else torch.tensor(t, device="cpu").numpy()
         for t in vec
     ]
     vec = np.hstack(vec)
@@ -118,7 +113,7 @@ class PCACoordinates:
         self.pca_, self.components = get_path_components_(
             training_path, n_components=dim - 1
         )
-        self.set_origin([t.to('cpu').detach().numpy() for t in origin])
+        self.set_origin([t.to("cpu").detach().numpy() for t in origin])
 
     def __call__(self, a, b=None):
         if self.dim == 3:
@@ -141,6 +136,7 @@ class LossSurface:
     """
     Represents the loss surface of a model on a data set using a loss function.
     """
+
     def __init__(self, model, inputs, outputs):
         self.model_ = model
         self.inputs_ = inputs
@@ -154,7 +150,7 @@ class LossSurface:
         loss_fun,
         surf=True,
         no_lg=False,
-        device='cuda:0',
+        device="cuda:0",
     ):
         r"""
         Computes the loss surface as a set of triples :math:`(a, b, l)`.
@@ -174,7 +170,7 @@ class LossSurface:
 
         test_batch = TensorDataset(self.inputs_, self.outputs_)
         testbatch_loader = DataLoader(test_batch, shuffle=True)
-        
+
         if surf:
             a_grid = torch.linspace(-1.0, 1.0, steps=points) ** 3 * range_
             b_grid = torch.linspace(-1.0, 1.0, steps=points) ** 3 * range_
@@ -224,7 +220,7 @@ class LossSurface:
             self.model_ = self.model_.to(device)
 
             for i, a in enumerate(a_line):
-                print(f'Point {i}/{len(a_line)}')
+                print(f"Point {i}/{len(a_line)}")
                 c = coords(a)
                 set_weights(self.model_, c)
 
@@ -238,7 +234,6 @@ class LossSurface:
 
                 # delta_f_D = self.model_.delta(self.inputs_.to(gpu2), self.outputs_.to(gpu2), loss_fun)
 
-                # print(f'in landscape')
                 # print(torch.cuda.memory_summary(device=gpu1))
                 # print(torch.cuda.memory_summary(device=gpu2))
 
@@ -251,21 +246,14 @@ class LossSurface:
                 loss_line[i] = loss
                 # gradient_line[i] = cat_jacobian_norm
 
-            ls_params = list(map(lambda ary: ary.data,
-                                 coords.origin_))
+            ls_params = list(map(lambda ary: ary.data, coords.origin_))
             set_weights(self.model_, ls_params)
 
             self.a_line_ = a_line
             self.loss_line_ = loss_line
             self.gradient_line_ = gradient_line
 
-    def plot(self,
-             title,
-             levels=20,
-             ax=None,
-             cmap='magma',
-             surf=False,
-             **kwargs):
+    def plot(self, title, levels=20, ax=None, cmap="magma", surf=False, **kwargs):
         """
         Plots the surface as a matplotlib contour plot.
 
@@ -284,15 +272,13 @@ class LossSurface:
         if ax is None:
             fig, ax = plt.subplots(**kwargs)
             ax.set_title(title)
-            ax.set_aspect('equal')
+            ax.set_aspect("equal")
 
         if surf:
             # Set Levels
             min_loss = zs.min()
             max_loss = zs.max()
-            levels = np.exp(np.linspace(np.log(min_loss),
-                                        np.log(max_loss),
-                                        num=levels))
+            levels = np.exp(np.linspace(np.log(min_loss), np.log(max_loss), num=levels))
             # Create Contour Plot
             CS = ax.contour(
                 xs,
@@ -301,17 +287,13 @@ class LossSurface:
                 levels=levels,
                 cmap=cmap,
                 linewidths=0.75,
-                norm=matplotlib.colors.LogNorm(vmin=min_loss,
-                                               vmax=max_loss * 2.0),
+                norm=matplotlib.colors.LogNorm(vmin=min_loss, vmax=max_loss * 2.0),
             )
-            ax.clabel(CS,
-                      inline=True,
-                      fontsize=8,
-                      fmt='%1.2f')
+            ax.clabel(CS, inline=True, fontsize=8, fmt="%1.2f")
         else:
             plot = ax.plot(xs, ys)
-            ax.set_xlabel('a')
-            ax.set_ylabel('loss')
+            ax.set_xlabel("a")
+            ax.set_ylabel("loss")
 
         return fig, ax
 
@@ -319,10 +301,10 @@ class LossSurface:
         """
         Saves the loss surface to a ``.csv`` file.
         """
-        with open(fname, 'w+') as f:
+        with open(fname, "w+") as f:
             writer = csv.writer(f)
             if surf:
-                writer.writerow(['xcoordinates', 'ycoordinates', 'train_loss'])
+                writer.writerow(["xcoordinates", "ycoordinates", "train_loss"])
                 xys = list(
                     itertools.product(self.a_grid_.numpy(), self.b_grid_.numpy())
                 )
@@ -330,7 +312,7 @@ class LossSurface:
                 ys = [tup[1] for tup in xys]
                 writer.writerows(zip(xs, ys, self.loss_grid_.flatten()))
             else:
-                writer.writerow(['xcoordinates', 'train_loss'])
+                writer.writerow(["xcoordinates", "train_loss"])
                 writer.writerows(zip(self.a_grid_.numpy(), self.loss_line_))
 
 
@@ -386,7 +368,7 @@ def plot_training_path(
         xs = path[:, 0]
         ys = loss_history
 
-    ax.scatter(xs, ys, s=4, c=colors, cmap='cividis', norm=norm)
+    ax.scatter(xs, ys, s=4, c=colors, cmap="cividis", norm=norm)
 
     return fig, ax
 
@@ -399,7 +381,7 @@ def columns_to_csv_(csv_filepath, colnames, cols):
         `colnames`: The column names.
         `cols`: The values of the column entries.
     """
-    with open(csv_filepath, 'w+') as f:
+    with open(csv_filepath, "w+") as f:
         writer = csv.writer(f)
         writer.writerow(colnames)
         writer.writerows(list(zip(*cols)))

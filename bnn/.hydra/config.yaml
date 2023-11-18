@@ -1,0 +1,52 @@
+experiment_name: bnn
+task: training
+box_model:
+  S0: 35.0
+  T0: 24.0
+  S1: 12
+  S2: 1000
+  T1: 1
+  T2: 10
+  area: 2500000000000000
+  k: 10000000000
+  depth: 4000
+  alpha: 0.2
+  beta: 0.8
+years: 1000
+save_path: null
+plot_ext: pdf
+data:
+  input_features:
+  - F
+  - DeltaS
+  - DeltaT
+  feature_names:
+  - $F$
+  - $\Delta S$
+  - $\Delta T$
+  test_size: 0.3
+  forcing: sinusoidal
+  forcing_kwargs:
+    FW_min: -10
+    FW_max: 10
+    period: 100
+model:
+  model_type: bnn
+  num_models: 50
+  num_epochs: 120
+  batch_size: 32
+  lr: 0.0001
+  l2_alpha: 0.003
+  hidden_size: 64
+  num_layers: 2
+  device: mps
+  plot_results: true
+  show_change_points: false
+  compute_bias: true
+  explain_after_train: captum.attr.ShapleyValues
+  explain_ylabel: Shapley Values
+  loggers:
+    lightning.pytorch.loggers.CSVLogger:
+      save_dir: .
+      version: bnn
+data_plot_name: data

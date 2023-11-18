@@ -6,7 +6,9 @@ from shap.plots._utils import convert_ordering
 import numpy as np
 import matplotlib.pyplot as pl
 from tqdm import tqdm
-from lightning.pytorch.callbacks import Callback
+import matplotlib.pyplot as plt
+
+import os.path as osp
 
 
 class explain_mode:
@@ -18,6 +20,18 @@ class explain_mode:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.model.explain_mode = False
+
+
+def setup_plt():
+    plt.rcParams.update(
+        {
+            "text.usetex": True,
+            "text.latex.preamble": r"""
+    \usepackage{amsmath}
+    \usepackage{amssymb}
+    """,
+        }
+    )
 
 
 def combine_forcing(time_0, time_max, ls_F_type, ls_F_length, step=150):
@@ -32,7 +46,7 @@ def combine_forcing(time_0, time_max, ls_F_type, ls_F_length, step=150):
         # Linear interpolation between minimum F and maximum F
         flux = FW_min + (FW_max - FW_min) * time / time_max
         return flux * area * S0 / year
-    
+
     def Fs_sinusoidal(time, time_max, FW_min=-0.1, FW_max=5):
         # Sinusoidal interpolation between minimum F and maximum F
         half_range = (FW_max - FW_min) / 2
@@ -47,29 +61,26 @@ def combine_forcing(time_0, time_max, ls_F_type, ls_F_length, step=150):
     last_t = time_0
     last_F = None
     for i, (F_type, F_length) in enumerate(zip(ls_F_type, ls_F_length)):
-        if F_type == 'c':
+        if F_type == "c":
             func = Fs_constant
-        elif F_type == 'l':
+        elif F_type == "l":
             func = Fs_linear
-        elif F_type == 's':
+        elif F_type == "s":
             func = Fs_sinusoidal
 
         diff = None
         for k in tqdm(range(0, F_length, step)):
             F = func(last_t + k, time_max)
-            
+
             if i > 0:
                 if k == 0:
                     diff = last_F - F
                 F += diff
-            
+
             combined.append(F)
 
         last_F = combined[-1]
         last_t += F_length
-
-    # pl.plot(combined)
-    # pl.show()
 
     return combined
 
@@ -80,41 +91,36 @@ def explain(model, X, n_features):
     It is assumed that the input is in the form of a time series with
     input series length `n_features`.
     """
-    features = [f'\(t - {i}\)' for i in reversed(range(1, n_features + 1))]
-    
+    features = [f"\(t - {i}\)" for i in reversed(range(1, n_features + 1))]
+
     e = shap.GradientExplainer(model, X)
 
     e.features = features
     shap_values = e(X)
-    
+
     return shap_values
 
 
 def explain_captum(model, attr_algorithm_cls, X, feature_names, **kwargs):
-    # ig = attr.IntegratedGradients(model)
-    # ig_nt = attr.NoiseTunnel(ig)
-    # dl = attr.DeepLift(model)
-    # gs = attr.GradientShap(model)
-    # fa = attr.FeatureAblation(model)
-    # lrp = attr.LRP(model)
-
-    # ig_attr_test = ig.attribute(X_test, target=0, n_steps=50)
-    # ig_nt_attr_test = ig_nt.attribute(X_test)
-    # fa_attr_test = fa.attribute(X_test)
-
     attr_alg = attr_algorithm_cls(model)
     attrs = attr_alg.attribute(X, **kwargs).cpu().detach()
-
-    # attr_alg = shap.explainers.KernelExplainer(model, X, feature_names=feature_names)
-    # attrs = attr_alg.shap_values(X)
-    # return attrs
-
     return shap.Explanation(values=attrs, data=X, feature_names=feature_names)
 
 
-def heatmap(attr_values, instance_order=Explanation.hclust(), feature_values=Explanation.abs.mean(0),
-            feature_order=None, max_display=10, cmap=colors.red_white_blue, show=True,
-            plot_width=8, xlabel='\(t\)', ylabel='Attribution Value'):
+def heatmap(
+    attr_values,
+    fig=None,
+    ax=None,
+    instance_order=Explanation.hclust(),
+    feature_values=Explanation.abs.mean(0),
+    feature_order=None,
+    max_display=10,
+    cmap=colors.red_white_blue,
+    show=True,
+    plot_width=8,
+    xlabel="\(t\)",
+    ylabel="Attribution Value",
+):
     # sort the SHAP values matrix by rows and columns
     values = attr_values.values
     if issubclass(type(feature_values), OpChain):
@@ -128,29 +134,22 @@ def heatmap(attr_values, instance_order=Explanation.hclust(), feature_values=Exp
     elif not hasattr(feature_order, "__len__"):
         raise Exception("Unsupported feature_order: %s!" % str(feature_order))
     instance_order = convert_ordering(instance_order, attr_values)
-    # if issubclass(type(instance_order), OpChain):
-    #     #xlabel += " " + instance_order.summary_string("SHAP values")
-    #     instance_order = instance_order.apply(Explanation(values))
-    # elif not hasattr(instance_order, "__len__"):
-    #     raise Exception("Unsupported instance_order: %s!" % str(instance_order))
-    # else:
-    #     instance_order_ops = None
 
     feature_names = np.array(attr_values.feature_names)[feature_order]
-    values = attr_values.values[instance_order][:,feature_order]
+    values = attr_values.values[instance_order][:, feature_order]
     feature_values = feature_values[feature_order]
 
     # if we have more features than `max_display`, then group all the excess features
     # into a single feature
     if values.shape[1] > max_display:
         new_values = np.zeros((values.shape[0], max_display))
-        new_values[:, :-1] = values[:, :max_display-1]
-        new_values[:, -1] = values[:, max_display-1:].sum(1)
+        new_values[:, :-1] = values[:, : max_display - 1]
+        new_values[:, -1] = values[:, max_display - 1 :].sum(1)
         new_feature_values = np.zeros(max_display)
-        new_feature_values[:-1] = feature_values[:max_display-1]
-        new_feature_values[-1] = feature_values[max_display-1:].sum()
+        new_feature_values[:-1] = feature_values[: max_display - 1]
+        new_feature_values[-1] = feature_values[max_display - 1 :].sum()
         feature_names = [
-            *feature_names[:max_display-1],
+            *feature_names[: max_display - 1],
             f"Sum of {values.shape[1] - max_display + 1} other features",
         ]
         values = new_values
@@ -158,8 +157,9 @@ def heatmap(attr_values, instance_order=Explanation.hclust(), feature_values=Exp
 
     # define the plot size based on how many features we are plotting
     row_height = 0.5
-    pl.gcf().set_size_inches(plot_width, values.shape[1] * row_height + 2.5)
-    ax = pl.gca()
+    f = fig if fig is not None else pl.gcf()
+    f.set_size_inches(plot_width, values.shape[1] * row_height + 2.5)
+    ax = ax if ax is not None else pl.gca()
 
     # plot the matrix of SHAP values as a heat map
     vmin, vmax = np.nanpercentile(values.flatten(), [1, 99])
@@ -167,8 +167,8 @@ def heatmap(attr_values, instance_order=Explanation.hclust(), feature_values=Exp
         values.T,
         aspect=0.7 * values.shape[0] / values.shape[1],
         interpolation="nearest",
-        vmin=min(vmin,-vmax),
-        vmax=max(-vmin,vmax),
+        vmin=min(vmin, -vmax),
+        vmax=max(-vmin, vmax),
         cmap=cmap,
     )
 
@@ -179,8 +179,8 @@ def heatmap(attr_values, instance_order=Explanation.hclust(), feature_values=Exp
     ax.spines[["left", "right"]].set_bounds(values.shape[1] - row_height, -row_height)
     ax.spines[["top", "bottom"]].set_visible(False)
     ax.tick_params(axis="both", direction="out")
-
     ax.set_ylim(values.shape[1] - row_height, -3)
+
     heatmap_yticks_pos = np.arange(values.shape[1])
     heatmap_yticks_labels = feature_names
     ax.yaxis.set_ticks(
@@ -218,6 +218,7 @@ def heatmap(attr_values, instance_order=Explanation.hclust(), feature_values=Exp
 
     # draw the color bar
     import matplotlib.cm as cm
+
     m = cm.ScalarMappable(cmap=cmap)
     m.set_array([min(vmin, -vmax), max(-vmin, vmax)])
     cb = pl.colorbar(
@@ -240,9 +241,5 @@ def heatmap(attr_values, instance_order=Explanation.hclust(), feature_values=Exp
         pl.show()
 
 
-class BiasCallback(Callback):
-    def on_train_start(self, trainer, pl_module):
-        print("Training is starting")
-
-    def on_train_end(self, trainer, pl_module):
-        print("Training is ending")
+def save_fig(fig, save_path, name, ext):
+    fig.savefig(osp.join(save_path, f"{name}.{ext}"))
