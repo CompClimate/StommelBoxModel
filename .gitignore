@@ -69,3 +69,9 @@ venv/
 outputs/
 
 .DS_STORE
+
+config/**/*.pdf
+
+fig/
+
+png/
