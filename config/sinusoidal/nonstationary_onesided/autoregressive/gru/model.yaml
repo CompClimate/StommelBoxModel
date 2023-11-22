@@ -1,0 +1,18 @@
+model_type: gru
+num_models: 50
+num_epochs: 120
+batch_size: 32
+lr: 0.0001
+l2_alpha: 3e-3
+hidden_size: 64
+num_layers: 2
+device: mps
+plot_results: True
+show_change_points: False
+compute_bias: True
+attr_alg: captum.attr.ShapleyValueSampling
+explain_ylabel: Shapley Values
+loggers:
+  lightning.pytorch.loggers.CSVLogger:
+    save_dir: "."
+    version: gru

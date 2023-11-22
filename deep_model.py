@@ -2,57 +2,18 @@
 
 import captum
 import captum.attr as attr
-import lightning
 import lightning.pytorch
 import lightning.pytorch as pl
 import matplotlib.pyplot as plt
-import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torch.optim as optim
-from sklearn.preprocessing import MinMaxScaler
 from torch.utils.data import DataLoader, TensorDataset
 from torchmetrics.regression import MeanSquaredError
 import ruptures as rpt
-import copy
 from landscape import RandomCoordinates, PCACoordinates, LossSurface
-import networkx as nx
 
 import bayes_layer as bl
-from utils import explain_captum, heatmap, explain_mode
-
-
-def sliding_windows(data, seq_length):
-    """
-    Transforms a 1d time series into sliding windows of length `seq_length`.
-    """
-    x = []
-    y = []
-
-    for i in range(len(data) - seq_length - 1):
-        _x = data[i : (i + seq_length)]
-        _y = data[i + seq_length]
-        x.append(_x)
-        y.append(_y)
-
-    return np.array(x), np.array(y)
-
-
-def prepare_data(train, test, seq_len, scale=False):
-    """From a train/test split, optionally scaled the data and returns sliding windows."""
-    if scale:
-        sc = MinMaxScaler()
-        train = sc.fit_transform(train)
-        test = sc.fit_transform(test)
-
-    X_train, y_train = sliding_windows(train, seq_len)
-    X_test, y_test = sliding_windows(test, seq_len)
-
-    X_train, X_test = X_train.astype(np.float32), X_test.astype(np.float32)
-    y_train, y_test = y_train.astype(np.float32), y_test.astype(np.float32)
-
-    return (X_train, y_train), (X_test, y_test)
 
 
 class RNNModel(nn.Module):
@@ -347,43 +308,7 @@ def train(
     cfg,
 ):
     """Trains a torch model given a training configuration."""
-    model_type = cfg["model_type"]
-
-    if model_type == "ensemble":
-        torch_model = TorchEnsemble(
-            [
-                MLPModel(
-                    cfg["input_dim"],
-                    cfg["hidden_size"],
-                    cfg["num_layers"],
-                )
-                for _ in range(cfg["num_models"])
-            ]
-        )
-    elif model_type == "bnn":
-        torch_model = BayesMLPModel(
-            cfg["input_dim"],
-            cfg["hidden_size"],
-            cfg["num_layers"],
-            num_MC=cfg["num_models"],
-        )
-    elif model_type == "mlp":
-        torch_model = MLPModel(
-            cfg["input_dim"],
-            cfg["hidden_size"],
-            cfg["num_layers"],
-        )
-    elif model_type == "conv":
-        torch_model = ConvModel()
-    elif model_type == "rnn":
-        torch_model = RNNModel(
-            cfg["input_dim"],
-            cfg["hidden_size"],
-            1,
-            cfg["num_layers"],
-            recurrent_type=cfg["recurrent_type"],
-        )
-
+    torch_model = torch_model_from_cfg(cfg)
     criterion = nn.MSELoss()
 
     train_set = TensorDataset(X_train, y_train)
@@ -419,16 +344,14 @@ def train(
 
 
 def get_loss_landscape(pl_model, X, y, loss_fun, **landscape_kwargs):
-    pcoords = RandomCoordinates(copy.deepcopy(list(pl_model.parameters())))
+    # pcoords = RandomCoordinates(copy.deepcopy(list(pl_model.parameters())))
     loss_landscape = LossSurface(pl_model, X, y)
-
-    c_range = 1
     loss_landscape.compile(
         loss_fun=loss_fun,
         **landscape_kwargs,
         # points=100,
         # coords=pcoords,
-        # range_=c_range,
+        # range_=1,
         # loss_fun=loss_fun,
         # surf=False,
         # device='mps',
@@ -440,7 +363,6 @@ def get_loss_landscape(pl_model, X, y, loss_fun, **landscape_kwargs):
 
 def plot_gt_pred(pl_model, X_train, y_train, X_test, y_test, cfg):
     with torch.no_grad():
-        pl_model = pl_model.to("cpu")
         train_pred_mean, train_pred_std = pl_model(X_train)
         train_pred_mean = train_pred_mean.view(-1)
         train_pred_std = train_pred_std.view(-1)
@@ -490,24 +412,50 @@ def compute_bias(pl_model, X_train, y_train, X_test, y_test):
         test_bias = pred_test - y_test
 
     fig, ax_bias = plt.subplots(ncols=2)
-    ax_bias[0].plot(train_bias)
+    ax_bias[0].plot(train_bias.cpu())
     ax_bias[0].set_title("Training Bias")
-    ax_bias[1].plot(test_bias)
+    ax_bias[1].plot(test_bias.cpu())
     ax_bias[1].set_title("Test Bias")
 
     return fig
 
 
-def attribute(pl_model, alg_cls, X_test, feature_names, ylabel):
-    with explain_mode(pl_model.model):
-        attrs = explain_captum(
-            pl_model.model,
-            alg_cls,
-            X_test,
-            feature_names,
+def torch_model_from_cfg(cfg):
+    model_type = cfg["model_type"]
+
+    if model_type == "ensemble":
+        torch_model = TorchEnsemble(
+            [
+                MLPModel(
+                    cfg["input_dim"],
+                    cfg["hidden_size"],
+                    cfg["num_layers"],
+                )
+                for _ in range(cfg["num_models"])
+            ]
+        )
+    elif model_type == "bnn":
+        torch_model = BayesMLPModel(
+            cfg["input_dim"],
+            cfg["hidden_size"],
+            cfg["num_layers"],
+            num_MC=cfg["num_models"],
+        )
+    elif model_type == "mlp":
+        torch_model = MLPModel(
+            cfg["input_dim"],
+            cfg["hidden_size"],
+            cfg["num_layers"],
+        )
+    elif model_type == "conv":
+        torch_model = ConvModel()
+    elif model_type in ["rnn", "lstm", "gru"]:
+        torch_model = RNNModel(
+            cfg["input_dim"],
+            cfg["hidden_size"],
+            1,
+            cfg["num_layers"],
+            recurrent_type=model_type,
         )
 
-    fig, ax = plt.subplots()
-    heatmap(attrs, fig=fig, ax=ax, ylabel=ylabel, show=False)
-
-    return fig
+    return torch_model

@@ -7,6 +7,10 @@ import numpy as np
 import matplotlib.pyplot as pl
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+from sklearn.preprocessing import MinMaxScaler
+import lrp.lrp as lrp
+import captum
+import captum.attr
 
 import os.path as osp
 
@@ -101,9 +105,20 @@ def explain(model, X, n_features):
     return shap_values
 
 
+class LRP:
+    def __init__(self, model):
+        self.lrp_model = lrp.LRPModel(model)
+
+    def attribute(self, X, **kwargs):
+        r = self.lrp_model.forward(X)
+        return r
+
+
 def explain_captum(model, attr_algorithm_cls, X, feature_names, **kwargs):
     attr_alg = attr_algorithm_cls(model)
     attrs = attr_alg.attribute(X, **kwargs).cpu().detach()
+    if len(attrs.size()) == 1:
+        attrs = attrs.unsqueeze(1)
     return shap.Explanation(values=attrs, data=X, feature_names=feature_names)
 
 
@@ -128,7 +143,9 @@ def heatmap(
     if issubclass(type(feature_values), Explanation):
         feature_values = feature_values.values
     if feature_order is None:
-        feature_order = np.argsort(-feature_values)
+        # feature_order = np.argsort(-feature_values)
+        feature_order = np.arange(len(feature_values))
+        feature_order = feature_order[::-1].copy()
     elif issubclass(type(feature_order), OpChain):
         feature_order = feature_order.apply(Explanation(values))
     elif not hasattr(feature_order, "__len__"):
@@ -243,3 +260,91 @@ def heatmap(
 
 def save_fig(fig, save_path, name, ext):
     fig.savefig(osp.join(save_path, f"{name}.{ext}"))
+
+
+def sliding_windows(data, seq_length):
+    """
+    Transforms a 1d time series into sliding windows of length `seq_length`.
+    """
+    x = []
+    y = []
+
+    for i in range(len(data) - seq_length - 1):
+        _x = data[i : (i + seq_length)]
+        _y = data[i + seq_length]
+        x.append(_x)
+        y.append(_y)
+
+    return np.array(x), np.array(y)
+
+
+def prepare_data(train, test, seq_len, scale=False):
+    """From a train/test split, optionally scaled the data and returns sliding windows."""
+    if scale:
+        sc = MinMaxScaler()
+        train = sc.fit_transform(train)
+        test = sc.fit_transform(test)
+
+    X_train, y_train = sliding_windows(train, seq_len)
+    X_test, y_test = sliding_windows(test, seq_len)
+
+    X_train, X_test = X_train.astype(np.float32), X_test.astype(np.float32)
+    y_train, y_test = y_train.astype(np.float32), y_test.astype(np.float32)
+
+    return (X_train, y_train), (X_test, y_test)
+
+
+def get_raw_data(
+    y,
+    F,
+    DeltaS,
+    DeltaT,
+    input_features,
+    autoregressive=False,
+    window_size=None,
+):
+    if autoregressive:
+        X, y = sliding_windows(y, window_size)
+    else:
+        feats = {
+            "F": F,
+            "DeltaS": DeltaS,
+            "DeltaT": DeltaT,
+        }
+
+        X = np.hstack([feats[name].reshape(-1, 1) for name in input_features])
+
+    X, y = X.astype(np.float32), y.astype(np.float32)
+    return X, y
+
+
+def attribute(pl_model, alg_cls, X, feature_names, ylabel):
+    with explain_mode(pl_model.model):
+        attrs = explain_captum(
+            pl_model.model,
+            alg_cls,
+            X,
+            feature_names,
+        )
+
+    fig, ax = plt.subplots()
+    heatmap(attrs, fig=fig, ax=ax, ylabel=ylabel, show=False)
+
+    return fig
+
+
+def plot_attributions(cfg, model_cfg, model, X, feature_names):
+    explain_ylabel = model_cfg["explain_ylabel"]
+    alg_cls = eval(cfg["attr_algorithm"])
+    if cfg["autoregressive"] and feature_names is None:
+        feature_names = [
+            f"\(t - {i}\)" for i in reversed(range(1, model_cfg["input_dim"] + 1))
+        ]
+    explain_fig = attribute(
+        model, alg_cls, X, feature_names, explain_ylabel
+    )
+    save_fig(explain_fig, cfg["save_path"], alg_cls.__name__, cfg["plot_ext"])
+
+
+def set_input_dim(cfg, input_features, window_size):
+    cfg["input_dim"] = len(input_features or ["dummy"] * window_size)

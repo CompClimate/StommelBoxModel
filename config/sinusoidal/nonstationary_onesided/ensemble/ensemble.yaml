@@ -1,48 +1,7 @@
-task: training
+box_model_config: ../../../box_model.yaml
+data_config: ../../data.yaml
+model_config: model.yaml
 
-box_model:
-  S0: 35.0
-  T0: 24.0
-  S1: 12
-  S2: 20
-  T1: 1
-  T2: 10
-  area: 2500000000000000 # (50000.0e3) ** 2
-  k: 10000000000 # 10e9
-  depth: 4000
-  alpha: 0.2
-  beta: 0.8
-
-years: 150000
 save_path: "."
 plot_ext: pdf
-
-data:
-  input_features: ["F", "DeltaS", "DeltaT"]
-  feature_names: ['$F$', '$\Delta S$', '$\Delta T$']
-  test_size: 0.3
-  forcing: sinusoidal
-  forcing_kwargs:
-    FW_min: 1
-    FW_max: 10
-    period: 20
-
-model:
-  model_type: ensemble
-  num_models: 50
-  num_epochs: 120
-  batch_size: 32
-  lr: 0.0001
-  l2_alpha: 3e-3
-  hidden_size: 64
-  num_layers: 2
-  device: mps
-  plot_results: True
-  show_change_points: False
-  compute_bias: True
-  explain_after_train: captum.attr.ShapleyValues
-  explain_ylabel: Shapley Values
-  loggers:
-    lightning.pytorch.loggers.CSVLogger:
-      save_dir: "."
-      version: ensemble
+attr_algorithm: captum.attr.ShapleyValues

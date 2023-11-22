@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy as sp
 from matplotlib.animation import FuncAnimation, PillowWriter
+import gsw
 
 from utils import combine_forcing
 
@@ -54,14 +55,26 @@ class BoxModel:
 
         return flow
 
-    def d_q_t(self, F):
+    def d_q_t(
+        self,
+        time,
+        time_max,
+        fn_forcing=None,
+        forcing_kwargs=dict(),
+        DeltaT=None,
+        DeltaS=None,
+    ):
         """Implements the analytical derivative of q wrt. t."""
-        return (
-            -self.k
-            * self.beta
-            * 2
-            * (F - abs(self.q(self.DeltaT, self.DeltaS)) * self.DeltaS)
-        )
+        if DeltaT is None:
+            DeltaT = self.DeltaT
+        if DeltaS is None:
+            DeltaS = self.DeltaS
+
+        F_s = fn_forcing(time, time_max, **forcing_kwargs)
+
+        ret = -self.k * self.beta * 2 * (F_s - abs(self.q(DeltaT, DeltaS)) * DeltaS)
+        print(time, ret)
+        return ret
 
     def d_DeltaS_t(self, F, DeltaT, DeltaS):
         """Implementation according to Potsdam"""
