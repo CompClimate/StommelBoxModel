@@ -18,7 +18,6 @@ rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 
 
 def ite(i, t, e):
-    print(f"ite: {i = }")
     return t if i else e
 
 
