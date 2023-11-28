@@ -77,3 +77,8 @@ fig/
 png/
 
 RcTorch/
+
+logs/*
+!logs/.gitkeep
+
+.github/
