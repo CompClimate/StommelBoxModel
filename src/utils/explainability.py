@@ -1,9 +1,11 @@
-import shap
-import matplotlib.pyplot as plt
-from utils.plot_utils import heatmap
 import os.path as osp
+
 import captum
 import captum.attr
+import matplotlib.pyplot as plt
+import shap
+
+from utils.plot_utils import heatmap
 
 
 class explain_mode:
@@ -18,12 +20,12 @@ class explain_mode:
 
 
 def explain(model, X, n_features):
-    """
-    Computes Shapley values for a model and given input using integrated gradients.
+    """Computes Shapley values for a model and given input using integrated gradients.
+
     It is assumed that the input is in the form of a time series with
     input series length `n_features`.
     """
-    features = [f"\(t - {i}\)" for i in reversed(range(1, n_features + 1))]
+    features = [fr"\(t - {i}\)" for i in reversed(range(1, n_features + 1))]
 
     e = shap.GradientExplainer(model, X)
 
@@ -73,6 +75,6 @@ def plot_attributions(
 ):
     alg_cls = eval(attr_algorithm)
     if autoregressive and feature_names is None:
-        feature_names = [f"\(t - {i}\)" for i in reversed(range(1, input_dim + 1))]
+        feature_names = [fr"\(t - {i}\)" for i in reversed(range(1, input_dim + 1))]
     explain_fig = attribute(model, alg_cls, X, feature_names, ylabel)
     save_fig(explain_fig, save_path, alg_cls.__name__, plot_ext)

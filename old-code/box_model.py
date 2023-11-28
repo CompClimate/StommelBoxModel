@@ -15,9 +15,7 @@ Sv = 1.0e9  # m^3/sec
 
 
 class BoxModel:
-    """
-    Implementation of Stommel's box model.
-    """
+    """Implementation of Stommel's box model."""
 
     def __init__(self, S0, S1, S2, T0, T1, T2, alpha, beta, k, area, depth):
         self.S0 = S0
@@ -63,7 +61,10 @@ class BoxModel:
         DeltaT=None,
         DeltaS=None,
     ):
-        """Implements the analytical derivative of q wrt. t."""
+        """Implements the analytical derivative of q wrt.
+
+        t.
+        """
         if DeltaT is None:
             DeltaT = self.DeltaT
         if DeltaS is None:
@@ -76,7 +77,7 @@ class BoxModel:
         return ret
 
     def d_DeltaS_t(self, F, DeltaT, DeltaS):
-        """Implementation according to Potsdam"""
+        """Implementation according to Potsdam."""
         return -2 * abs(self.q(DeltaT, DeltaS)) * DeltaS - 2 * F
 
     def rho(self, T, S):
@@ -132,8 +133,9 @@ class BoxModel:
         DeltaT=None,
         DeltaS=None,
     ):
-        """
-        Implements the right-hand side of the derivative of S wrt. t (time).
+        """Implements the right-hand side of the derivative of S wrt.
+
+        t (time).
         """
         if fn_forcing is None:
             fn_forcing = self.Fs_sinusoidal
@@ -157,8 +159,9 @@ class BoxModel:
         DeltaT=None,
         DeltaS=None,
     ):
-        """
-        Implements the right-hand side of the derivative of T wrt. t (time).
+        """Implements the right-hand side of the derivative of T wrt.
+
+        t (time).
         """
         if fn_forcing is None:
             fn_forcing = self.Fs_sinusoidal
@@ -174,10 +177,8 @@ class BoxModel:
         return rhs / self.V
 
     def simulate(self, Fs_range):
-        """
-        Computes the steady state solutions as well as the q values
-        for the above values of F.
-        """
+        """Computes the steady state solutions as well as the q values for the above values of
+        F."""
         DeltaS_steady = np.zeros((3, len(Fs_range)))
         q_steady = np.zeros((3, len(Fs_range)))
 
@@ -221,7 +222,7 @@ def plot_steady(Fs_range, DeltaS_steady, q_steady, S0, area, normalize=True):
     )
     ax[0].title("(a) steady states")
     ax[0].xlabel("$F_s$ (m/year)")
-    ax[0].ylabel("$\Delta S$")
+    ax[0].ylabel(r"$\Delta S$")
     ax[0].xlim([min(Fs_range_normalized), max(Fs_range_normalized)])
 
     # Plot all three solutions for q (in Sv) as function of Fs in units of m/year:
@@ -275,8 +276,8 @@ def plot_rhs(model, time, time_max, DeltaS_range, fig=None, ax=None):
     ax.plot(yy[1], 0, "go", markersize=10)
     ax.plot(yy[2], 0, "bo", markersize=10, fillstyle="none")
     ax.set_title("(c) stability")
-    ax.set_xlabel("\(\Delta S\)")
-    ax.set_ylabel("\(d\Delta S/dt\)")
+    ax.set_xlabel(r"\(\Delta S\)")
+    ax.set_ylabel(r"\(d\Delta S/dt\)")
 
     return fig, ax
 
@@ -362,22 +363,22 @@ def plot_time_series(Time_DS, Time_DT, F, y, DeltaS, DeltaT):
     ax[0, 0].plot(xs_S, F, color="tab:blue")
     ax[0, 0].plot(xs_S, Time_DS * 0, "k--", dashes=(10, 5), lw=0.5)
     ax[0, 0].set_xlabel("Time (kyr)")
-    ax[0, 0].set_ylabel("\(F\) (m/yr)")
+    ax[0, 0].set_ylabel(r"\(F\) (m/yr)")
 
     ax[0, 1].plot(xs_S, y, color="tab:blue")
     ax[0, 1].plot(xs_S, Time_DS * 0, "k--", dashes=(10, 5), lw=0.5)
     ax[0, 1].set_xlabel("Time (kyr)")
-    ax[0, 1].set_ylabel("\(q\) (Sv)")
+    ax[0, 1].set_ylabel(r"\(q\) (Sv)")
 
     ax[1, 0].plot(xs_S, DeltaS, color="tab:blue")
     ax[1, 0].plot(xs_S, Time_DS * 0, "k--", dashes=(10, 5), lw=0.5)
     ax[1, 0].set_xlabel("Time (kyr)")
-    ax[1, 0].set_ylabel("\(\Delta S\)")
+    ax[1, 0].set_ylabel(r"\(\Delta S\)")
 
     ax[1, 1].plot(xs_T, DeltaT, color="tab:blue")
     ax[1, 1].plot(xs_T, Time_DT * 0, "k--", dashes=(10, 5), lw=0.5)
     ax[1, 1].set_xlabel("Time (kyr)")
-    ax[1, 1].set_ylabel("\(\Delta T\)")
+    ax[1, 1].set_ylabel(r"\(\Delta T\)")
 
     fig.tight_layout()
 
@@ -393,7 +394,7 @@ def animation(filename, fig, ax, model, time_max):
         _, _, artists = get_time_series(model, time_max, fig=fig, ax=ax)
         # model.T2 += 0.1
         model.T2 = sin_range[i]
-        ax.set_title(f"\(T_1 = {model.T1}\), \(T_2 = {model.T2}\)")
+        ax.set_title(fr"\(T_1 = {model.T1}\), \(T_2 = {model.T2}\)")
         return artists
 
     anim = FuncAnimation(

@@ -1,7 +1,7 @@
-import torch
 import lightning.pytorch as pl
-from torchmetrics.regression import MeanSquaredError
+import torch
 from torchmetrics import MeanMetric
+from torchmetrics.regression import MeanSquaredError
 
 
 class Model(pl.LightningModule):

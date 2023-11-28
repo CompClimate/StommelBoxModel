@@ -3,12 +3,12 @@ from typing import Any, Dict, Optional
 import hydra
 import torch
 from lightning import LightningDataModule
-from torch.utils.data import DataLoader, TensorDataset
 from sklearn.model_selection import train_test_split
+from torch.utils.data import DataLoader, TensorDataset
 
+import utils.data_utils as data_utils
 from data.components import box_model as box
 from data.components import forcing
-import utils.data_utils as data_utils
 
 
 class TimeSeriesDatamodule(LightningDataModule):
@@ -21,7 +21,7 @@ class TimeSeriesDatamodule(LightningDataModule):
         test_size: float,
         window_size=None,
         batch_size: int = 16,
-        feature_names = None,
+        feature_names=None,
         num_workers: int = 0,
         pin_memory: bool = False,
     ) -> None:
@@ -84,9 +84,7 @@ class TimeSeriesDatamodule(LightningDataModule):
                 raise RuntimeError(
                     f"Batch size ({self.hparams.batch_size}) is not divisible by the number of devices ({self.trainer.world_size})."
                 )
-            self.batch_size_per_device = (
-                self.hparams.batch_size // self.trainer.world_size
-            )
+            self.batch_size_per_device = self.hparams.batch_size // self.trainer.world_size
 
     def train_dataloader(self) -> DataLoader[Any]:
         """Create and return the train dataloader.

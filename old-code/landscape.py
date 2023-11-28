@@ -1,14 +1,15 @@
-import torch
-import numpy as np
-from sklearn.decomposition import PCA
-from torch.utils.data import TensorDataset, DataLoader
-import pytorch_lightning as pl
+import copy
+import csv
+import itertools
+import random
+
 import matplotlib
 import matplotlib.pyplot as plt
-import itertools
-import csv
-import copy
-import random
+import numpy as np
+import pytorch_lightning as pl
+import torch
+from sklearn.decomposition import PCA
+from torch.utils.data import DataLoader, TensorDataset
 
 
 def set_weights(model, weights):
@@ -19,44 +20,29 @@ def set_weights(model, weights):
 
 
 class RandomCoordinates:
-    """
-    Implements the random coordinates approach for Loss Landscape Visualization.
-    """
+    """Implements the random coordinates approach for Loss Landscape Visualization."""
 
     def __init__(self, origin, dim=2):
         self.origin_ = origin
         self.dim = dim
-        self.v0_ = normalize_weights(
-            [np.random.normal(size=w.shape) for w in origin], origin
-        )
-        self.v1_ = normalize_weights(
-            [np.random.normal(size=w.shape) for w in origin], origin
-        )
+        self.v0_ = normalize_weights([np.random.normal(size=w.shape) for w in origin], origin)
+        self.v1_ = normalize_weights([np.random.normal(size=w.shape) for w in origin], origin)
 
     def __call__(self, a, b=None):
         if self.dim == 3:
-            return [
-                a * w0 + b * w1 + wc
-                for w0, w1, wc in zip(self.v0_, self.v1_, self.origin_)
-            ]
+            return [a * w0 + b * w1 + wc for w0, w1, wc in zip(self.v0_, self.v1_, self.origin_)]
         elif self.dim == 2:
             return [a * w0 + wc for w0, wc in zip(self.v0_, self.origin_)]
 
 
 @torch.no_grad()
 def normalize_weights(weights, origin):
-    """
-    Performs an element-wise normalization of the weight matrices.
-    """
-    return [
-        w * np.linalg.norm(wc) / np.linalg.norm(w) for w, wc in zip(weights, origin)
-    ]
+    """Performs an element-wise normalization of the weight matrices."""
+    return [w * np.linalg.norm(wc) / np.linalg.norm(w) for w, wc in zip(weights, origin)]
 
 
 def vectorize_weights_(weights):
-    """
-    A utility to transform the raw model parameters into a numpy array.
-    """
+    """A utility to transform the raw model parameters into a numpy array."""
     vec = [w.flatten() for w in weights]
     vec = [
         t.cpu().clone().detach().numpy()
@@ -103,24 +89,17 @@ def get_path_components_(training_path, n_components=2):
 
 
 class PCACoordinates:
-    """
-    Implements the PCA coordinates approach for Loss Landscape Visualization.
-    """
+    """Implements the PCA coordinates approach for Loss Landscape Visualization."""
 
     def __init__(self, training_path, dim=3):
         origin = training_path[-1]
         self.dim = dim
-        self.pca_, self.components = get_path_components_(
-            training_path, n_components=dim - 1
-        )
+        self.pca_, self.components = get_path_components_(training_path, n_components=dim - 1)
         self.set_origin([t.to("cpu").detach().numpy() for t in origin])
 
     def __call__(self, a, b=None):
         if self.dim == 3:
-            return [
-                a * w0 + b * w1 + wc
-                for w0, w1, wc in zip(self.v0_, self.v1_, self.origin_)
-            ]
+            return [a * w0 + b * w1 + wc for w0, w1, wc in zip(self.v0_, self.v1_, self.origin_)]
         elif self.dim == 2:
             return [a * w0 + wc for w0, wc in zip(self.v0_, self.origin_)]
 
@@ -133,9 +112,7 @@ class PCACoordinates:
 
 
 class LossSurface:
-    """
-    Represents the loss surface of a model on a data set using a loss function.
-    """
+    """Represents the loss surface of a model on a data set using a loss function."""
 
     def __init__(self, model, inputs, outputs):
         self.model_ = model
@@ -152,8 +129,7 @@ class LossSurface:
         no_lg=False,
         device="cuda:0",
     ):
-        r"""
-        Computes the loss surface as a set of triples :math:`(a, b, l)`.
+        r"""Computes the loss surface as a set of triples :math:`(a, b, l)`.
 
         Args:
             `range`: The domain over which to compute the loss surface.
@@ -205,9 +181,7 @@ class LossSurface:
 
                     loss_grid[j, i] = loss
 
-            self.model_.set_weights(
-                list(map(lambda ary: torch.from_numpy(ary), coords.origin_))
-            )
+            self.model_.set_weights(list(map(lambda ary: torch.from_numpy(ary), coords.origin_)))
             self.a_grid_ = a_grid
             self.b_grid_ = b_grid
             self.loss_grid_ = loss_grid
@@ -254,8 +228,7 @@ class LossSurface:
             self.gradient_line_ = gradient_line
 
     def plot(self, title, levels=20, ax=None, cmap="magma", surf=False, **kwargs):
-        """
-        Plots the surface as a matplotlib contour plot.
+        """Plots the surface as a matplotlib contour plot.
 
         :return: A ``matplotlib`` Axes object.
         """
@@ -298,16 +271,12 @@ class LossSurface:
         return fig, ax
 
     def to_csv(self, fname, surf=True):
-        """
-        Saves the loss surface to a ``.csv`` file.
-        """
+        """Saves the loss surface to a ``.csv`` file."""
         with open(fname, "w+") as f:
             writer = csv.writer(f)
             if surf:
                 writer.writerow(["xcoordinates", "ycoordinates", "train_loss"])
-                xys = list(
-                    itertools.product(self.a_grid_.numpy(), self.b_grid_.numpy())
-                )
+                xys = list(itertools.product(self.a_grid_.numpy(), self.b_grid_.numpy()))
                 xs = [tup[0] for tup in xys]
                 ys = [tup[1] for tup in xys]
                 writer.writerows(zip(xs, ys, self.loss_grid_.flatten()))
@@ -317,9 +286,8 @@ class LossSurface:
 
 
 def weights_to_coordinates(coords, training_path, surf=True):
-    """
-    Projects the training path onto the first two principal components using the pseudoinverse.
-    """
+    """Projects the training path onto the first two principal components using the
+    pseudoinverse."""
     components = [coords.v0_]
     if surf:
         components.append(coords.v1_)
@@ -330,10 +298,7 @@ def weights_to_coordinates(coords, training_path, surf=True):
     # the origin vector
     w_c = vectorize_weights_(training_path[-1])
     coord_path = np.array(
-        [
-            comp_matrix_i @ (vectorize_weights_(weights) - w_c)
-            for weights in training_path
-        ]
+        [comp_matrix_i @ (vectorize_weights_(weights) - w_c) for weights in training_path]
     )
     return coord_path
 
@@ -374,8 +339,7 @@ def plot_training_path(
 
 
 def columns_to_csv_(csv_filepath, colnames, cols):
-    """
-    Writes a sequence of sequences of equal length to a csv.
+    """Writes a sequence of sequences of equal length to a csv.
 
     Args:
         `colnames`: The column names.

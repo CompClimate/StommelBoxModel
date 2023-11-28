@@ -3,9 +3,7 @@ from sklearn.preprocessing import MinMaxScaler
 
 
 def sliding_windows(data, seq_length):
-    """
-    Transforms a 1d time series into sliding windows of length `seq_length`.
-    """
+    """Transforms a 1d time series into sliding windows of length `seq_length`."""
     x = []
     y = []
 

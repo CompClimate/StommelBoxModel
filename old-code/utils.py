@@ -1,17 +1,17 @@
-import shap
-from shap import Explanation
-from shap.utils import OpChain
-from shap.plots import colors
-from shap.plots._utils import convert_ordering
-import numpy as np
-import matplotlib.pyplot as pl
-from tqdm import tqdm
-import matplotlib.pyplot as plt
-from sklearn.preprocessing import MinMaxScaler
+import os.path as osp
+
 import captum
 import captum.attr
-
-import os.path as osp
+import matplotlib.pyplot as pl
+import matplotlib.pyplot as plt
+import numpy as np
+import shap
+from shap import Explanation
+from shap.plots import colors
+from shap.plots._utils import convert_ordering
+from shap.utils import OpChain
+from sklearn.preprocessing import MinMaxScaler
+from tqdm import tqdm
 
 
 class explain_mode:
@@ -89,12 +89,12 @@ def combine_forcing(time_0, time_max, ls_F_type, ls_F_length, step=150):
 
 
 def explain(model, X, n_features):
-    """
-    Computes Shapley values for a model and given input using integrated gradients.
+    """Computes Shapley values for a model and given input using integrated gradients.
+
     It is assumed that the input is in the form of a time series with
     input series length `n_features`.
     """
-    features = [f"\(t - {i}\)" for i in reversed(range(1, n_features + 1))]
+    features = [fr"\(t - {i}\)" for i in reversed(range(1, n_features + 1))]
 
     e = shap.GradientExplainer(model, X)
 
@@ -123,7 +123,7 @@ def heatmap(
     cmap=colors.red_white_blue,
     show=True,
     plot_width=8,
-    xlabel="\(t\)",
+    xlabel=r"\(t\)",
     ylabel="Attribution Value",
 ):
     # sort the SHAP values matrix by rows and columns
@@ -253,9 +253,7 @@ def save_fig(fig, save_path, name, ext):
 
 
 def sliding_windows(data, seq_length):
-    """
-    Transforms a 1d time series into sliding windows of length `seq_length`.
-    """
+    """Transforms a 1d time series into sliding windows of length `seq_length`."""
     x = []
     y = []
 
@@ -327,9 +325,7 @@ def plot_attributions(cfg, model_cfg, model, X, feature_names):
     explain_ylabel = model_cfg["explain_ylabel"]
     alg_cls = eval(cfg["attr_algorithm"])
     if cfg["autoregressive"] and feature_names is None:
-        feature_names = [
-            f"\(t - {i}\)" for i in reversed(range(1, model_cfg["input_dim"] + 1))
-        ]
+        feature_names = [fr"\(t - {i}\)" for i in reversed(range(1, model_cfg["input_dim"] + 1))]
     explain_fig = attribute(model, alg_cls, X, feature_names, explain_ylabel)
     save_fig(explain_fig, cfg["save_path"], alg_cls.__name__, cfg["plot_ext"])
 

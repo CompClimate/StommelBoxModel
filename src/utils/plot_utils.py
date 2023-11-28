@@ -1,12 +1,13 @@
+import os.path as osp
+
 import matplotlib.pyplot as plt
+import numpy as np
+import ruptures as rpt
+import torch
 from shap import Explanation
-from shap.utils import OpChain
 from shap.plots import colors
 from shap.plots._utils import convert_ordering
-import numpy as np
-import os.path as osp
-import torch
-import ruptures as rpt
+from shap.utils import OpChain
 
 
 def setup_plt():
@@ -32,7 +33,7 @@ def heatmap(
     cmap=colors.red_white_blue,
     show=True,
     plot_width=8,
-    xlabel="\(t\)",
+    xlabel=r"\(t\)",
     ylabel="Attribution Value",
 ):
     # sort the SHAP values matrix by rows and columns
@@ -195,7 +196,7 @@ def compute_bias(pl_model, X_train, y_train, X_test, y_test):
         alpha=0.3,
     )
 
-    ax.set_xlabel("\(t\)")
+    ax.set_xlabel(r"\(t\)")
     ax.set_ylabel(r"\(\hat{q} - q\)")
     ax.legend()
 
@@ -218,13 +219,9 @@ def plot_gt_pred(pl_model, X_train, y_train, X_test, y_test, show_change_points=
 
     fig, ax = plt.subplots()
     xs_time_train = list(range(1, len(train_pred_mean) + 1))
-    xs_time_test = list(
-        range(len(train_pred_mean), len(train_pred_mean) + len(test_pred_mean))
-    )
+    xs_time_test = list(range(len(train_pred_mean), len(train_pred_mean) + len(test_pred_mean)))
 
-    ax.plot(
-        xs_time_train, y_train, label="Ground Truth: Training Set", color="tab:blue"
-    )
+    ax.plot(xs_time_train, y_train, label="Ground Truth: Training Set", color="tab:blue")
     ax.plot(
         xs_time_train,
         train_pred_mean,
@@ -256,8 +253,8 @@ def plot_gt_pred(pl_model, X_train, y_train, X_test, y_test, show_change_points=
     if show_change_points:
         ax.vlines(result, y_test.min(), y_test.max(), ls="--")
 
-    ax.set_xlabel("\(t\)")
-    ax.set_ylabel("\(q\) (Sv)")
+    ax.set_xlabel(r"\(t\)")
+    ax.set_ylabel(r"\(q\) (Sv)")
     ax.legend()
 
     return fig

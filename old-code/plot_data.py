@@ -1,10 +1,11 @@
-import hydra
-from omegaconf import DictConfig, OmegaConf
-from collections import defaultdict
-import matplotlib.pyplot as plt
 import os
+from collections import defaultdict
 
 import box_model
+import hydra
+import matplotlib.pyplot as plt
+from omegaconf import DictConfig, OmegaConf
+
 from utils import save_fig, setup_plt
 
 setup_plt()

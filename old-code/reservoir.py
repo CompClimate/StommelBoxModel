@@ -1,7 +1,7 @@
-import reservoirpy as rpy
-from reservoirpy.nodes import Reservoir, Ridge, RLS, ESN
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
+import reservoirpy as rpy
+from reservoirpy.nodes import ESN, RLS, Reservoir, Ridge
 
 rpy.verbosity(0)
 rpy.set_seed(42)

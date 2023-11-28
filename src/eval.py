@@ -5,10 +5,11 @@ import rootutils
 from lightning import LightningDataModule, LightningModule, Trainer
 from lightning.pytorch.loggers import Logger
 from omegaconf import DictConfig
+
 from data.components.box_model import BoxModel
 from data.components.forcing import Forcing
 from data.time_series_datamodule import TimeSeriesDatamodule
-from utils.plot_utils import compute_bias, save_fig, plot_gt_pred
+from utils.plot_utils import compute_bias, plot_gt_pred, save_fig
 
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 # ------------------------------------------------------------------------------------ #
@@ -28,13 +29,8 @@ rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 # more info: https://github.com/ashleve/rootutils
 # ------------------------------------------------------------------------------------ #
 
-from src.utils import (
-    RankedLogger,
-    extras,
-    instantiate_loggers,
-    log_hyperparameters,
-    task_wrapper,
-)
+from src.utils import (RankedLogger, extras, instantiate_loggers,
+                       log_hyperparameters, task_wrapper)
 
 log = RankedLogger(__name__, rank_zero_only=True)
 

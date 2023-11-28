@@ -1,11 +1,9 @@
-from rctorch import RcNetwork, RcBayesOpt
-import rctorch.data as data
-from rctorch.data import final_figure_plot as phase_plot
-
 import matplotlib.pyplot as plt
-from matplotlib.pyplot import cm
 import numpy as np
-
+import rctorch.data as data
+from matplotlib.pyplot import cm
+from rctorch import RcBayesOpt, RcNetwork
+from rctorch.data import final_figure_plot as phase_plot
 
 plt.rcParams.update({"text.usetex": True})
 plt.rcParams.update({"font.size": 22})

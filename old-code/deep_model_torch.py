@@ -1,20 +1,19 @@
 """Implements things related to torch-based neural networks."""
 
+import bayes_layer as bl
 import captum
 import captum.attr as attr
 import lightning.pytorch
 import lightning.pytorch as pl
 import matplotlib.pyplot as plt
+import ruptures as rpt
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from landscape import LossSurface, PCACoordinates, RandomCoordinates
 from torch.utils.data import DataLoader, TensorDataset
-from torchmetrics.regression import MeanSquaredError
 from torchmetrics import MeanMetric
-import ruptures as rpt
-from landscape import RandomCoordinates, PCACoordinates, LossSurface
-
-import bayes_layer as bl
+from torchmetrics.regression import MeanSquaredError
 
 
 class RNNModel(nn.Module):
@@ -58,9 +57,7 @@ class RNNModel(nn.Module):
         )
         # if quantify_uncertainty > 0.0:
         # self.init_second_rnn_()
-        self.fc = nn.Linear(
-            hidden_size * 2 if bidirectional else hidden_size, output_size
-        )
+        self.fc = nn.Linear(hidden_size * 2 if bidirectional else hidden_size, output_size)
         self.explain_mode = False
 
     def init_second_rnn_(self):
@@ -405,13 +402,9 @@ def plot_gt_pred(pl_model, X_train, y_train, X_test, y_test, cfg):
 
     fig, ax = plt.subplots()
     xs_time_train = list(range(1, len(train_pred_mean) + 1))
-    xs_time_test = list(
-        range(len(train_pred_mean), len(train_pred_mean) + len(test_pred_mean))
-    )
+    xs_time_test = list(range(len(train_pred_mean), len(train_pred_mean) + len(test_pred_mean)))
 
-    ax.plot(
-        xs_time_train, y_train, label="Ground Truth: Training Set", color="tab:blue"
-    )
+    ax.plot(xs_time_train, y_train, label="Ground Truth: Training Set", color="tab:blue")
     ax.plot(
         xs_time_train,
         train_pred_mean,
@@ -443,8 +436,8 @@ def plot_gt_pred(pl_model, X_train, y_train, X_test, y_test, cfg):
     if cfg["show_change_points"]:
         ax.vlines(result, y_test.min(), y_test.max(), ls="--")
 
-    ax.set_xlabel("\(t\)")
-    ax.set_ylabel("\(q\) (Sv)")
+    ax.set_xlabel(r"\(t\)")
+    ax.set_ylabel(r"\(q\) (Sv)")
     ax.legend()
 
     return fig
@@ -488,7 +481,7 @@ def compute_bias(pl_model, X_train, y_train, X_test, y_test):
         alpha=0.3,
     )
 
-    ax.set_xlabel("\(t\)")
+    ax.set_xlabel(r"\(t\)")
     ax.set_ylabel(r"\(\hat{q} - q\)")
     ax.legend()
 

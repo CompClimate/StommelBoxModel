@@ -1,14 +1,15 @@
-import torch
-import torch.nn as nn
-import hydra
-from omegaconf import DictConfig, OmegaConf
+from collections import defaultdict
+
+import box_model
 import captum
 import captum.attr
+import hydra
+import torch
+import torch.nn as nn
+from deep_model_torch import Model, torch_model_from_cfg
+from omegaconf import DictConfig, OmegaConf
 
-from deep_model_torch import torch_model_from_cfg, Model
-from utils import get_raw_data, setup_plt, plot_attributions, set_input_dim
-from collections import defaultdict
-import box_model
+from utils import get_raw_data, plot_attributions, set_input_dim, setup_plt
 
 setup_plt()
 

@@ -43,9 +43,7 @@ class RNNModel(nn.Module):
         )
         # if quantify_uncertainty > 0.0:
         # self.init_second_rnn_()
-        self.fc = nn.Linear(
-            hidden_size * 2 if bidirectional else hidden_size, output_size
-        )
+        self.fc = nn.Linear(hidden_size * 2 if bidirectional else hidden_size, output_size)
         self.explain_mode = False
 
     def init_second_rnn_(self):

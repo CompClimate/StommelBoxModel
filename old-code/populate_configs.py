@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 config_dir = Path("config")
 model_types = ["mlp", "ensemble", "bnn"]
 autoregressive_model_types = ["mlp", "ensemble", "bnn", "conv", "rnn", "gru", "lstm"]

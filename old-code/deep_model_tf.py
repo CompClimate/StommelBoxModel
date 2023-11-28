@@ -1,11 +1,11 @@
-import tensorflow as tf
-import numpy as np
 import keras
-from keras import layers
-import tensorflow_probability as tfp
-from tensorflow_probability import layers as tfpl
-from tensorflow_probability import distributions as tfd
 import matplotlib.pyplot as plt
+import numpy as np
+import tensorflow as tf
+import tensorflow_probability as tfp
+from keras import layers
+from tensorflow_probability import distributions as tfd
+from tensorflow_probability import layers as tfpl
 
 
 def prior(kernel_size, bias_size, dtype=None):
@@ -13,9 +13,7 @@ def prior(kernel_size, bias_size, dtype=None):
     prior_model = keras.models.Sequential(
         [
             tfpl.DistributionLambda(
-                lambda t: tfd.MultivariateNormalDiag(
-                    loc=tf.zeros(n), scale_diag=tf.ones(n)
-                )
+                lambda t: tfd.MultivariateNormalDiag(loc=tf.zeros(n), scale_diag=tf.ones(n))
             ),
         ]
     )
@@ -39,9 +37,7 @@ def bayes_mlp(hidden_dim, num_layers):
 
 
 X_train = np.linspace(-1, 1, 1000)[:, np.newaxis]
-y_train = (
-    np.power(X_train, 3) + 0.1 * (2 + X_train) * np.random.randn(1000)[:, np.newaxis]
-)
+y_train = np.power(X_train, 3) + 0.1 * (2 + X_train) * np.random.randn(1000)[:, np.newaxis]
 
 model = keras.models.Sequential(
     [
@@ -82,9 +78,7 @@ y_hat_m2std = y_hat - 2 * y_model.stddev()
 y_hat_p2std = y_hat + 2 * y_model.stddev()
 
 plt.scatter(X_train, y_train, alpha=0.2, label="data")
-plt.plot(X_train, y_hat, color="red", alpha=0.8, label="model $\mu$")
-plt.plot(
-    X_train, y_hat_m2std, color="green", alpha=0.8, label="model $\mu \pm 2 \sigma$"
-)
+plt.plot(X_train, y_hat, color="red", alpha=0.8, label=r"model $\mu$")
+plt.plot(X_train, y_hat_m2std, color="green", alpha=0.8, label=r"model $\mu \pm 2 \sigma$")
 plt.plot(X_train, y_hat_p2std, color="green", alpha=0.8)
 plt.show()

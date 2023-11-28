@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+
 import src
 
 
@@ -8,9 +9,7 @@ class TorchEnsemble(nn.Module):
 
     def __init__(self, model_cls, num_models, input_dim, hidden_dim, n_hidden):
         super().__init__()
-        self.models = [
-            eval(model_cls)(input_dim, hidden_dim, n_hidden) for _ in range(num_models)
-        ]
+        self.models = [eval(model_cls)(input_dim, hidden_dim, n_hidden) for _ in range(num_models)]
         self.explain_mode = False
         for i, model in enumerate(self.models):
             self.register_module(f"model_{i}", model)

@@ -1,19 +1,21 @@
 """Entry point for training/explanation/evaluation."""
 
+import os
+from collections import defaultdict
+
+import box_model
+import captum
+import captum.attr
+import deep_model_torch
 import hydra
 import matplotlib.pyplot as plt
 import numpy as np
+import torch
 from omegaconf import DictConfig, OmegaConf
 from sklearn.model_selection import train_test_split
-import torch
-from collections import defaultdict
-import captum
-import captum.attr
-import os
 
-import box_model
-import deep_model_torch
-from utils import save_fig, setup_plt, get_raw_data, plot_attributions, set_input_dim
+from utils import (get_raw_data, plot_attributions, save_fig, set_input_dim,
+                   setup_plt)
 
 setup_plt()
 
@@ -87,9 +89,7 @@ def train(cfg, box_model_cfg, data_cfg, model_cfg):
 
     # Generate bias plot
     if compute_bias:
-        fig_bias = deep_model_torch.compute_bias(
-            pl_model, X_train, y_train, X_test, y_test
-        )
+        fig_bias = deep_model_torch.compute_bias(pl_model, X_train, y_train, X_test, y_test)
         save_fig(fig_bias, save_path, "bias", plot_ext)
 
     # Generate ground truth -- prediction plot
@@ -106,9 +106,7 @@ def train(cfg, box_model_cfg, data_cfg, model_cfg):
 
     # Generate attribution plot
     if cfg["attr_algorithm"] is not None:
-        plot_attributions(
-            cfg, model_cfg, pl_model.to(model_cfg["device"]), X, feature_names
-        )
+        plot_attributions(cfg, model_cfg, pl_model.to(model_cfg["device"]), X, feature_names)
 
 
 @hydra.main(version_base=None)

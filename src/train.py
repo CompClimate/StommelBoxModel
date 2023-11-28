@@ -6,19 +6,22 @@ import rootutils
 import torch
 from lightning import Callback, LightningDataModule, LightningModule, Trainer
 from lightning.pytorch.loggers import Logger
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
+
 from data.components.box_model import BoxModel, plot_time_series
 from data.components.forcing import Forcing
 from data.time_series_datamodule import TimeSeriesDatamodule
-from utils.plot_utils import compute_bias, save_fig, plot_gt_pred
 from utils.explainability import plot_attributions
-from omegaconf import OmegaConf
+from utils.plot_utils import compute_bias, plot_gt_pred, save_fig
 
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
+
 
 def ite(i, t, e):
     print(f"ite: {i = }")
     return t if i else e
+
+
 # OmegaConf.register_new_resolver("ifthenelse", lambda i, t, e: t if i else e)
 OmegaConf.register_new_resolver("ifthenelse", ite)
 # ------------------------------------------------------------------------------------ #
@@ -38,15 +41,9 @@ OmegaConf.register_new_resolver("ifthenelse", ite)
 # more info: https://github.com/ashleve/rootutils
 # ------------------------------------------------------------------------------------ #
 
-from src.utils import (
-    RankedLogger,
-    extras,
-    get_metric_value,
-    instantiate_callbacks,
-    instantiate_loggers,
-    log_hyperparameters,
-    task_wrapper,
-)
+from src.utils import (RankedLogger, extras, get_metric_value,
+                       instantiate_callbacks, instantiate_loggers,
+                       log_hyperparameters, task_wrapper)
 
 log = RankedLogger(__name__, rank_zero_only=True)
 
@@ -90,9 +87,7 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     logger: List[Logger] = instantiate_loggers(cfg.get("logger"))
 
     log.info(f"Instantiating trainer <{cfg.trainer._target_}>")
-    trainer: Trainer = hydra.utils.instantiate(
-        cfg.trainer, callbacks=callbacks, logger=logger
-    )
+    trainer: Trainer = hydra.utils.instantiate(cfg.trainer, callbacks=callbacks, logger=logger)
 
     object_dict = {
         "cfg": cfg,
