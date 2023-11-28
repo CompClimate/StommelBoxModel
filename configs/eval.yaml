@@ -1,0 +1,23 @@
+# @package _global_
+
+defaults:
+  - _self_
+  - data: physics_informed
+  - box_model: basic
+  - forcing: sinusoidal_low_period
+  - model: mlp
+  - callbacks: default
+  - logger: csv
+  - trainer: default
+  - paths: default
+  - extras: default
+  - hydra: default
+
+  - experiment: null
+
+task_name: "eval"
+
+tags: ["dev"]
+
+# passing checkpoint path is necessary for evaluation
+ckpt_path: ???

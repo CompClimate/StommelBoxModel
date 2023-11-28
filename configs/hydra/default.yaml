@@ -1,0 +1,19 @@
+# https://hydra.cc/docs/configure_hydra/intro/
+
+defaults:
+  - override hydra_logging: colorlog
+  - override job_logging: colorlog
+
+run:
+  # dir: ${paths.log_dir}/${task_name}/runs/${now:%Y-%m-%d}_${now:%H-%M-%S}
+  # ${ifthenelse:${hydra:runtime.choices.data},"autoregressive/",""}
+  dir: ${paths.log_dir}/${task_name}/runs/${hydra:runtime.choices.forcing}/${hydra:runtime.choices.model}/${hydra:runtime.choices.data}
+sweep:
+  dir: ${paths.log_dir}/${task_name}/multiruns/${now:%Y-%m-%d}_${now:%H-%M-%S}
+  subdir: ${hydra.job.num}
+
+job_logging:
+  handlers:
+    file:
+      # Incorporates fix from https://github.com/facebookresearch/hydra/pull/2242
+      filename: ${hydra.runtime.output_dir}/${task_name}.log

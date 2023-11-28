@@ -1,7 +1,0 @@
-box_model_config: ../../../box_model.yaml
-data_config: ../../data.yaml
-model_config: model.yaml
-
-save_path: "."
-plot_ext: pdf
-attr_algorithm: captum.attr.ShapleyValues

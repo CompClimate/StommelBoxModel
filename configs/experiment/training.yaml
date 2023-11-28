@@ -1,0 +1,27 @@
+# @package _global_
+
+defaults:
+  - override /box_model: basic
+  - override /forcing: sinusoidal_onesided
+  - override /data: autoregressive
+  - override /model: mlp
+  - override /callbacks: none
+  - override /trainer: mps
+
+test: False
+
+plot_bias: True
+plot_data: True
+plot_gt_pred: True
+attr_algorithm: captum.attr.ShapleyValueSampling
+feature_names: null
+attr_ylabel: "Shapley Values"
+
+trainer:
+  min_epochs: 120
+  max_epochs: 120
+
+model:
+  optimizer:
+    lr: 0.001
+    weight_decay: 3e-3

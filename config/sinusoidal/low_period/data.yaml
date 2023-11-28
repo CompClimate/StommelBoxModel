@@ -1,8 +1,0 @@
-input_features: ["F", "DeltaS", "DeltaT"]
-feature_names: ['$F$', '$\Delta S$', '$\Delta T$']
-test_size: 0.3
-forcing: sinusoidal
-forcing_kwargs:
-  FW_min: -10
-  FW_max: 10
-  period: 10
