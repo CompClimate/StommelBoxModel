@@ -12,7 +12,7 @@ from data.components.box_model import BoxModel, plot_time_series
 from data.components.forcing import Forcing
 from data.time_series_datamodule import TimeSeriesDatamodule
 from utils.explainability import plot_attributions
-from utils.plot_utils import compute_bias, plot_gt_pred, save_fig
+from utils.plot_utils import setup_plt, compute_bias, plot_gt_pred, save_fig
 
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 
@@ -43,6 +43,8 @@ OmegaConf.register_new_resolver("ifthenelse", ite)
 from src.utils import (RankedLogger, extras, get_metric_value,
                        instantiate_callbacks, instantiate_loggers,
                        log_hyperparameters, task_wrapper)
+
+setup_plt()
 
 log = RankedLogger(__name__, rank_zero_only=True)
 

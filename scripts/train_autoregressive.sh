@@ -10,7 +10,6 @@ for forcing in sinusoidal_{low_period,nonstationary,nonstationary_onesided}; do
 			model=$model data=autoregressive \
 			forcing=$forcing \
 			tags="[$forcing, autoregressive, $model]" \
-			feature_names="[F, DeltaT, DeltaS]" \
 			++model.net.input_dim=$window_size \
 			++data.window_size=$window_size
 	done

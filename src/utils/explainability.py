@@ -76,5 +76,7 @@ def plot_attributions(
     alg_cls = eval(attr_algorithm)
     if autoregressive and feature_names is None:
         feature_names = [fr"\(t - {i}\)" for i in reversed(range(1, input_dim + 1))]
+    elif feature_names is not None:
+        feature_names = [fr"\({feature_name}\)" for feature_name in feature_names]
     explain_fig = attribute(model, alg_cls, X, feature_names, ylabel)
     save_fig(explain_fig, save_path, alg_cls.__name__, plot_ext)
