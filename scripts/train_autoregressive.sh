@@ -1,10 +1,18 @@
 #!/bin/bash
 
 args=("$@")
+
+declare -a forcings=(
+	"sinusoidal_low_period"
+	"sinusoidal_nonstationary"
+	"sinusoidal_nonstationary_onesided"
+)
+# declare -a models=("mlp" "bnn" "ensemble" "rnn" "lstm" "gru")
+declare -a models=("conv")
 window_size=10
 
-for forcing in sinusoidal_{low_period,nonstationary,nonstationary_onesided}; do
-	for model in ensemble mlp bnn; do
+for forcing in "${forcings[@]}"; do
+	for model in "${models[@]}"; do
 		python ../src/train.py \
 			experiment=${args[0]} \
 			model=$model data=autoregressive \
