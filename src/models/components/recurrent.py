@@ -7,9 +7,9 @@ class RNNModel(nn.Module):
 
     def __init__(
         self,
-        input_size,
-        hidden_size,
-        output_size,
+        input_dim,
+        hidden_dim,
+        output_dim,
         num_layers,
         recurrent_type="rnn",
         rnn_dropout=0.3,
@@ -18,10 +18,10 @@ class RNNModel(nn.Module):
     ):
         super().__init__()
 
-        self.output_size = output_size
+        self.input_dim = input_dim
+        self.hidden_size = hidden_dim
+        self.output_dim = output_dim
         self.num_layers = num_layers
-        self.input_size = input_size
-        self.hidden_size = hidden_size
         self.rnn_dropout = rnn_dropout
         self.bidirectional = bidirectional
         self.quantify_uncertainty = quantify_uncertainty
@@ -34,8 +34,8 @@ class RNNModel(nn.Module):
             rnn_cls = nn.GRU
 
         self.rnn = rnn_cls(
-            input_size=input_size,
-            hidden_size=hidden_size,
+            input_size=input_dim,
+            hidden_size=hidden_dim,
             num_layers=num_layers,
             batch_first=True,
             dropout=rnn_dropout,
@@ -43,7 +43,7 @@ class RNNModel(nn.Module):
         )
         # if quantify_uncertainty > 0.0:
         # self.init_second_rnn_()
-        self.fc = nn.Linear(hidden_size * 2 if bidirectional else hidden_size, output_size)
+        self.fc = nn.Linear(hidden_dim * 2 if bidirectional else hidden_dim, output_dim)
         self.explain_mode = False
 
     def init_second_rnn_(self):

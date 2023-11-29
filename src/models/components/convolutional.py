@@ -2,7 +2,7 @@ import torch.nn as nn
 
 
 class ConvModel(nn.Module):
-    def __init__(self):
+    def __init__(self, input_dim, hidden_dim, n_hidden):
         super().__init__()
         self.explain_mode = False
         self.input_block = nn.Conv1d(1, 16, 3)
