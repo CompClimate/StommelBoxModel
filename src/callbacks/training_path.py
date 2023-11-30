@@ -1,9 +1,7 @@
 import lightning.pytorch as pl
 
 
-class TrainingPathCallback(pl.Callback):
-    # TODO: test
-    
+class TrainingPath(pl.Callback):
     def __init__(self):
         super().__init__()
         self.training_path = []
