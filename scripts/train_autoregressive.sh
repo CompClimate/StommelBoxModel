@@ -7,8 +7,7 @@ declare -a forcings=(
 	"sinusoidal_nonstationary"
 	"sinusoidal_nonstationary_onesided"
 )
-# declare -a models=("mlp" "bnn" "ensemble" "rnn" "lstm" "gru")
-declare -a models=("conv")
+declare -a models=("mlp" "bnn" "ensemble" "rnn" "lstm" "gru" "conv")
 window_size=10
 
 for forcing in "${forcings[@]}"; do

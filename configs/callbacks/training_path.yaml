@@ -1,0 +1,2 @@
+training_path:
+  _target_: src.callbacks.training_path.TrainingPath
