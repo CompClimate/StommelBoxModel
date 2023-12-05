@@ -1,8 +1,0 @@
-years: 150000
-test_size: 0.3
-window_size: 10
-forcing: sinusoidal
-forcing_kwargs:
-  FW_min: 1
-  FW_max: 10
-  period: 20
