@@ -5,15 +5,15 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+from matplotlib import cm
 from sklearn.decomposition import PCA
-from torch.utils.data import DataLoader, TensorDataset
 
 
+@torch.no_grad()
 def set_weights(model, weights):
     # Weights should be a sequence of tensors
-    with torch.no_grad():
-        for param, new_param in zip(model.parameters(), weights):
-            param.copy_(new_param)
+    for param, new_param in zip(model.parameters(), weights):
+        param.copy_(new_param)
 
 
 @torch.no_grad()
@@ -74,7 +74,7 @@ def get_path_components_(training_path, n_components=2):
 class RandomCoordinates:
     """Implements the random coordinates approach for Loss Landscape Visualization."""
 
-    def __init__(self, origin, dim=2):
+    def __init__(self, origin, dim=3):
         self.origin_ = origin
         self.dim = dim
         self.v0_ = normalize_weights(
@@ -122,13 +122,12 @@ class PCACoordinates:
                 self.v1_ = normalize_weights(self.components[1], origin)
 
 
-class LossSurface:
-    """Represents the loss surface of a model on a data set using a loss function."""
+class LossLandscape:
+    """Represents the loss landscape of a model on a data set using a loss function."""
 
-    def __init__(self, model, inputs, outputs):
-        self.model_ = model
-        self.inputs_ = inputs
-        self.outputs_ = outputs
+    def __init__(self, model, data_loader):
+        self.model = model
+        self.data_loader = data_loader
 
     def compile(
         self,
@@ -136,64 +135,65 @@ class LossSurface:
         points,
         coords,
         loss_fun,
-        surf=True,
-        no_lg=False,
-        device="cuda:0",
+        surface=True,
+        device="cuda",
     ):
-        r"""Computes the loss surface as a set of triples :math:`(a, b, l)`.
+        r"""Computes the loss landscape as a set of triples :math:`(a, b, l)`.
 
         Args:
-            `range`: The domain over which to compute the loss surface.
+            `range`: The domain over which to compute the loss landscape.
                      This is expected to be a scalar multiplier such that :math:`\text{range} \cdot \left[-1, 1\right]`
                      is the final domain.
             `points`: The amount of triples to sample.
             `coords`: A ``RandomCoordinates`` or ``PCACoordiantes`` object.
             `loss_fun`: The loss function to sample from. This is expected to be a callable object (preferably a PyTorch composed function).
-            `surf`: Whether to compile a 3d surface or a 2d line line.
+            `surface`: Whether to compile a 3d landscape or a 2d line line.
             `log_lg`: Whether to record the loss-gradient-norm pair for each compiled point.
 
         :return: A ``matplotlib`` Axes object.
         """
 
-        test_batch = TensorDataset(self.inputs_, self.outputs_)
-        testbatch_loader = DataLoader(test_batch, shuffle=True)
-
-        if surf:
+        if surface:
             a_grid = torch.linspace(-1.0, 1.0, steps=points) ** 3 * range_
             b_grid = torch.linspace(-1.0, 1.0, steps=points) ** 3 * range_
             loss_grid = np.empty([len(a_grid), len(b_grid)])
             gradient_grid = np.empty([len(a_grid), len(b_grid)])
 
-            self.model_ = self.model_.to(device)
-
+            self.model = self.model.to(device)
             for i, a in enumerate(a_grid):
                 for j, b in enumerate(b_grid):
+                    # print(f"{i} / {points}, {j} / {points}")
                     c = coords(a, b)
-                    self.model_.set_weights(c, device=device)
+                    set_weights(self.model, c)
 
                     loss = 0.0
-                    for x, y in testbatch_loader:
-                        x, y = x.to(device), y.to(device)
-                        yhat = self.model_(x)
-                        loss += loss_fun(yhat, y).item()
-                    loss /= len(testbatch_loader)
+                    with torch.no_grad():
+                        for x, y in self.data_loader:
+                            x, y = x.to(device), y.to(device)
+                            mu, _ = self.model(x)
+                            loss += loss_fun(mu.squeeze(), y).item()
+                    loss /= len(self.data_loader) * self.data_loader.batch_size
 
-                    if not no_lg:
-                        delta_f_D = self.model_.delta(
-                            self.inputs_.to(device), self.outputs_.to(device), loss_fun
-                        )
-                        raw_jacobian = torch.autograd.functional.jacobian(
-                            delta_f_D,
-                            tuple([_.view(-1) for _ in self.model_.parameters()]),
-                        )
-                        cat_jacobian = torch.cat(raw_jacobian)
-                        cat_jacobian_norm = torch.linalg.norm(cat_jacobian)
-                        gradient_grid[j, i] = cat_jacobian_norm
+                    # if not no_lg:
+                    #     delta_f_D = self.model.delta(
+                    #         self.inputs_.to(device), self.outputs_.to(device), loss_fun
+                    #     )
+                    #     raw_jacobian = torch.autograd.functional.jacobian(
+                    #         delta_f_D,
+                    #         tuple([_.view(-1) for _ in self.model.parameters()]),
+                    #     )
+                    #     cat_jacobian = torch.cat(raw_jacobian)
+                    #     cat_jacobian_norm = torch.linalg.norm(cat_jacobian)
+                    #     gradient_grid[j, i] = cat_jacobian_norm
 
                     loss_grid[j, i] = loss
 
-            self.model_.set_weights(
-                list(map(lambda ary: torch.from_numpy(ary), coords.origin_))
+            self.model = self.model.cpu()
+
+            set_weights(
+                self.model,
+                coords.origin_,
+                # list(map(lambda ary: torch.from_numpy(ary), coords.origin_)),
             )
             self.a_grid_ = a_grid
             self.b_grid_ = b_grid
@@ -204,28 +204,28 @@ class LossSurface:
             loss_line = np.empty(len(a_line))
             gradient_line = np.empty(len(a_line))
 
-            self.model_ = self.model_.to(device)
+            self.model = self.model.to(device)
 
             for i, a in enumerate(a_line):
                 print(f"Point {i}/{len(a_line)}")
                 c = coords(a)
-                set_weights(self.model_, c)
+                set_weights(self.model, c)
 
                 loss = 0.0
-                for x, y in testbatch_loader:
+                for x, y in self.data_loader:
                     x, y = x.to(device), y.to(device)
-                    yhat, _ = self.model_(x)
+                    yhat, _ = self.model(x)
                     yhat = yhat.unsqueeze(dim=-1)
                     loss += loss_fun(yhat, y).item()
-                loss /= len(testbatch_loader)
+                loss /= len(self.data_loader)
 
-                # delta_f_D = self.model_.delta(self.inputs_.to(gpu2), self.outputs_.to(gpu2), loss_fun)
+                # delta_f_D = self.model.delta(self.inputs_.to(gpu2), self.outputs_.to(gpu2), loss_fun)
 
                 # print(torch.cuda.memory_summary(device=gpu1))
                 # print(torch.cuda.memory_summary(device=gpu2))
 
                 # raw_jacobian = jacobian(
-                #     delta_f_D, tuple([_.view(-1) for _ in self.model_.parameters()])
+                #     delta_f_D, tuple([_.view(-1) for _ in self.model.parameters()])
                 # )
                 # cat_jacobian = torch.cat(raw_jacobian)
                 # cat_jacobian_norm = torch.linalg.norm(cat_jacobian)
@@ -234,18 +234,18 @@ class LossSurface:
                 # gradient_line[i] = cat_jacobian_norm
 
             ls_params = list(map(lambda ary: ary.data, coords.origin_))
-            set_weights(self.model_, ls_params)
+            set_weights(self.model, ls_params)
 
             self.a_line_ = a_line
             self.loss_line_ = loss_line
             self.gradient_line_ = gradient_line
 
-    def plot(self, title, levels=20, ax=None, cmap="magma", surf=False, **kwargs):
-        """Plots the surface as a matplotlib contour plot.
+    def plot(self, title, levels=20, ax=None, cmap="magma", surface=False, **kwargs):
+        """Plots the landscape as a matplotlib contour plot.
 
         :return: A ``matplotlib`` Axes object.
         """
-        if surf:
+        if surface:
             xs = self.a_grid_
             ys = self.b_grid_
             zs = self.loss_grid_
@@ -260,7 +260,7 @@ class LossSurface:
             ax.set_title(title)
             ax.set_aspect("equal")
 
-        if surf:
+        if surface:
             # Set Levels
             min_loss = zs.min()
             max_loss = zs.max()
@@ -284,7 +284,7 @@ class LossSurface:
         return fig, ax
 
     def to_csv(self, fname, surf=True):
-        """Saves the loss surface to a ``.csv`` file."""
+        """Saves the loss landscape to a .csv file."""
         with open(fname, "w+") as f:
             writer = csv.writer(f)
             if surf:

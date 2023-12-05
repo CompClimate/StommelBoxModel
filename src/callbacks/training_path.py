@@ -1,9 +1,17 @@
+import os
+import os.path as osp
+import pickle
+
 import lightning.pytorch as pl
 
 
 class TrainingPath(pl.Callback):
-    def __init__(self):
+    PKL_FILE_NAME = "training_path.pkl"
+
+    def __init__(self, save_dir, name):
         super().__init__()
+        self.save_dir = save_dir
+        self.name = name
         self.training_path = []
 
     def _append_params(self, pl_module):
@@ -26,6 +34,13 @@ class TrainingPath(pl.Callback):
         # w_c from any element then leads to the 0-tensor and we receive a single point at (0, 0).
         # We thus clone each of the referenced tensors such that we actually collect the weights.
         self._append_params(pl_module)
+
+    def on_train_end(self, trainer, pl_module):
+        path = osp.join(self.save_dir, self.name)
+        os.makedirs(path, exist_ok=True)
+
+        with open(osp.join(path, self.PKL_FILE_NAME), "wb") as f:
+            pickle.dump(self.training_path, f)
 
     def load_state_dict(self, state_dict):
         self.training_path = state_dict["training_path"]

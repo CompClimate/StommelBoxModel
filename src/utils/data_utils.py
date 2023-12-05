@@ -33,24 +33,21 @@ def prepare_data(train, test, seq_len, scale=False):
 
 
 def get_raw_data(
-    y,
-    F,
-    DeltaS,
-    DeltaT,
-    input_features,
+    series_dict,
     autoregressive=False,
     window_size=None,
 ):
     if autoregressive:
+        y = series_dict["q"]
         X, y = sliding_windows(y, window_size)
     else:
-        feats = {
-            "F": F,
-            "DeltaS": DeltaS,
-            "DeltaT": DeltaT,
-        }
+        series_features = list(series_dict["features"].values())
+        features = series_features[0].copy()
+        for d in series_features[1:]:
+            features.update(d)
 
-        X = np.hstack([feats[name].reshape(-1, 1) for name in input_features])
+        X = np.hstack([value.reshape(-1, 1) for value in features.values()])
+        y = series_dict["q"]
 
     X, y = X.astype(np.float32), y.astype(np.float32)
     return X, y

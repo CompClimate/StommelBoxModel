@@ -1,0 +1,3 @@
+- experiment=training
+- s_forcing=sinusoidal_nonstationary
+- t_forcing=linear_asymmetric

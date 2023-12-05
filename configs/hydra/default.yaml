@@ -7,7 +7,7 @@ defaults:
 run:
   # dir: ${paths.log_dir}/${task_name}/runs/${now:%Y-%m-%d}_${now:%H-%M-%S}
   # ${ifthenelse:${hydra:runtime.choices.data},"autoregressive/",""}
-  dir: ${paths.log_dir}/${task_name}/runs/${hydra:runtime.choices.forcing}/${hydra:runtime.choices.model}/${hydra:runtime.choices.data}
+  dir: ${paths.log_dir}/${task_name}/runs/${hydra:runtime.choices.s_forcing}${ifthenelse:${hydra:runtime.choices.data.autoregressive},"+${hydra:runtime.choices.t_forcing}",""}/${hydra:runtime.choices.density}_density/${hydra:runtime.choices.model}/${hydra:runtime.choices.data}
 sweep:
   dir: ${paths.log_dir}/${task_name}/multiruns/${now:%Y-%m-%d}_${now:%H-%M-%S}
   subdir: ${hydra.job.num}

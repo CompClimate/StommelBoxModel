@@ -4,7 +4,9 @@ defaults:
   - _self_
   - data: physics_informed
   - box_model: basic
-  - forcing: constant
+  - density: linear
+  - s_forcing: linear_symmetric
+  - t_forcing: linear_symmetric
   - model: mlp
   - callbacks: default
   - logger: csv

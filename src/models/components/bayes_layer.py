@@ -109,7 +109,9 @@ class BayesLinear(nn.Module):
         self.dim_output = out_features
         self.num_MC = num_MC
 
-        self.mu_init_std = torch.sqrt(torch.scalar_tensor(2 / (in_features + out_features)))
+        self.mu_init_std = torch.sqrt(
+            torch.scalar_tensor(2 / (in_features + out_features))
+        )
         self.logsigma_init_std = 0.001
 
         self.weight = VariationalNormal(
@@ -139,7 +141,8 @@ class BayesLinear(nn.Module):
     def reset_parameters(self, scale_offset=0):
         nn.init.kaiming_uniform_(self.weight.loc.data, a=math.sqrt(5))
         self.weight.logscale.data.fill_(
-            torch.log(torch.exp((self.mu_init_std) / self.weight.loc.shape[1]) - 1) + scale_offset
+            torch.log(torch.exp((self.mu_init_std) / self.weight.loc.shape[1]) - 1)
+            + scale_offset
         )
 
         if self.bias is not None:
@@ -180,9 +183,9 @@ class BayesLinear(nn.Module):
                 torch.matmul(x.pow(2), F.softplus(self.weight_logscale).pow(2))
                 + F.softplus(self.bias_logscale).pow(2)
             )
-            epsilon = torch.FloatTensor(x.shape[0], x.shape[1], self.dim_output).normal_(
-                0.0, self.epsilon_sigma
-            )
+            epsilon = torch.FloatTensor(
+                x.shape[0], x.shape[1], self.dim_output
+            ).normal_(0.0, self.epsilon_sigma)
             out = mean + epsilon * std
 
         self.kl_div = torch.distributions.kl_divergence(
@@ -193,4 +196,6 @@ class BayesLinear(nn.Module):
         return out
 
     def __repr__(self):
-        return f"BayesLinear(in_features={self.dim_input}, out_features={self.dim_output}"
+        return (
+            f"BayesLinear(in_features={self.dim_input}, out_features={self.dim_output}"
+        )

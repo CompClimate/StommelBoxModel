@@ -1,48 +1,32 @@
+import rootutils
+
+rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
+
 from typing import Any, Dict, List, Optional, Tuple
 
 import hydra
 import lightning as L
-import rootutils
 import torch
-from lightning import Callback, LightningDataModule, LightningModule, Trainer
+from lightning import Callback, LightningModule, Trainer
 from lightning.pytorch.loggers import Logger
 from omegaconf import DictConfig, OmegaConf
 
 from data.components.box_model import BoxModel, plot_time_series
 from data.components.forcing import Forcing
 from data.time_series_datamodule import TimeSeriesDatamodule
+from src.utils import (RankedLogger, extras, get_metric_value,
+                       instantiate_callbacks, instantiate_loggers,
+                       log_hyperparameters, task_wrapper)
 from utils.explainability import plot_attributions
-from utils.plot_utils import setup_plt, compute_bias, plot_gt_pred, save_fig
-
-rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
+from utils.plot_utils import compute_bias, plot_gt_pred, save_fig, setup_plt
 
 
 def ite(i, t, e):
     return t if i else e
 
 
-# OmegaConf.register_new_resolver("ifthenelse", lambda i, t, e: t if i else e)
 OmegaConf.register_new_resolver("ifthenelse", ite)
-# ------------------------------------------------------------------------------------ #
-# the setup_root above is equivalent to:
-# - adding project root dir to PYTHONPATH
-#       (so you don't need to force user to install project as a package)
-#       (necessary before importing any local modules e.g. `from src import utils`)
-# - setting up PROJECT_ROOT environment variable
-#       (which is used as a base for paths in "configs/paths/default.yaml")
-#       (this way all filepaths are the same no matter where you run the code)
-# - loading environment variables from ".env" in root dir
-#
-# you can remove it if you:
-# 1. either install project as a package or move entry files to project root dir
-# 2. set `root_dir` to "." in "configs/paths/default.yaml"
-#
-# more info: https://github.com/ashleve/rootutils
-# ------------------------------------------------------------------------------------ #
 
-from src.utils import (RankedLogger, extras, get_metric_value,
-                       instantiate_callbacks, instantiate_loggers,
-                       log_hyperparameters, task_wrapper)
 
 setup_plt()
 
@@ -72,11 +56,18 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     log.info(f"Instantiating box model <{cfg.box_model._target_}>")
     box_model: BoxModel = hydra.utils.instantiate(cfg.box_model)
 
-    log.info(f"Instantiating box model <{cfg.forcing._target_}>")
-    forcing: Forcing = hydra.utils.instantiate(cfg.forcing)
+    log.info(f"Instantiating S forcing <{cfg.s_forcing._target_}>")
+    s_forcing: Forcing = hydra.utils.instantiate(cfg.s_forcing)
+    log.info(f"Instantiating T forcing <{cfg.s_forcing._target_}>")
+    t_forcing: Forcing = hydra.utils.instantiate(cfg.t_forcing)
 
-    # datamodule: LightningDataModule = hydra.utils.instantiate(cfg.data, box_model=box_model, forcing=forcing)
-    datamodule = TimeSeriesDatamodule(box_model, forcing, **cfg.data)
+    datamodule = TimeSeriesDatamodule(
+        box_model,
+        s_forcing,
+        t_forcing,
+        **cfg.density,
+        **cfg.data,
+    )
 
     log.info(f"Instantiating model <{cfg.model._target_}>")
     model: LightningModule = hydra.utils.instantiate(cfg.model)
@@ -88,12 +79,17 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     logger: List[Logger] = instantiate_loggers(cfg.get("logger"))
 
     log.info(f"Instantiating trainer <{cfg.trainer._target_}>")
-    trainer: Trainer = hydra.utils.instantiate(cfg.trainer, callbacks=callbacks, logger=logger)
+    trainer: Trainer = hydra.utils.instantiate(
+        cfg.trainer,
+        callbacks=callbacks,
+        logger=logger,
+    )
 
     object_dict = {
         "cfg": cfg,
         "box_model": box_model,
-        "forcing": forcing,
+        "s_forcing": s_forcing,
+        "t_forcing": t_forcing,
         "datamodule": datamodule,
         "model": model,
         "callbacks": callbacks,
@@ -143,14 +139,7 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         save_fig(fig_bias, working_dir, "bias", "pdf")
 
     if cfg.get("plot_data"):
-        data_fig = plot_time_series(
-            datamodule.TimeDS,
-            datamodule.TimeDT,
-            datamodule.F,
-            datamodule.q,
-            datamodule.DeltaS,
-            datamodule.DeltaT,
-        )
+        data_fig = plot_time_series(datamodule.series_dict)
         save_fig(data_fig, working_dir, "data", "pdf")
 
     # Generate ground truth -- prediction plot

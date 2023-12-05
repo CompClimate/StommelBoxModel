@@ -11,6 +11,9 @@ from omegaconf import DictConfig
 from data.components.box_model import BoxModel
 from data.components.forcing import Forcing
 from data.time_series_datamodule import TimeSeriesDatamodule
+from src.utils import (RankedLogger, extras, get_metric_value,
+                       instantiate_callbacks, instantiate_loggers,
+                       log_hyperparameters, task_wrapper)
 
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 # ------------------------------------------------------------------------------------ #
@@ -30,9 +33,6 @@ rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 # more info: https://github.com/ashleve/rootutils
 # ------------------------------------------------------------------------------------ #
 
-from src.utils import (RankedLogger, extras, get_metric_value,
-                       instantiate_callbacks, instantiate_loggers,
-                       log_hyperparameters, task_wrapper)
 
 log = RankedLogger(__name__, rank_zero_only=True)
 
@@ -73,7 +73,9 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     print(f"{logger = }")
 
     log.info(f"Instantiating trainer <{cfg.trainer._target_}>")
-    trainer: Trainer = hydra.utils.instantiate(cfg.trainer, callbacks=callbacks, logger=logger)
+    trainer: Trainer = hydra.utils.instantiate(
+        cfg.trainer, callbacks=callbacks, logger=logger
+    )
 
     object_dict = {
         "cfg": cfg,

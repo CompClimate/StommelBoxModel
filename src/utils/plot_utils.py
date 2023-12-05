@@ -219,9 +219,13 @@ def plot_gt_pred(pl_model, X_train, y_train, X_test, y_test, show_change_points=
 
     fig, ax = plt.subplots()
     xs_time_train = list(range(1, len(train_pred_mean) + 1))
-    xs_time_test = list(range(len(train_pred_mean), len(train_pred_mean) + len(test_pred_mean)))
+    xs_time_test = list(
+        range(len(train_pred_mean), len(train_pred_mean) + len(test_pred_mean))
+    )
 
-    ax.plot(xs_time_train, y_train, label="Ground Truth: Training Set", color="tab:blue")
+    ax.plot(
+        xs_time_train, y_train, label="Ground Truth: Training Set", color="tab:blue"
+    )
     ax.plot(
         xs_time_train,
         train_pred_mean,

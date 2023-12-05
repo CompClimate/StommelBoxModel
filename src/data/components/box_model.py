@@ -1,10 +1,14 @@
 """Implements things related to the Stommel Box Model."""
 
+from math import ceil
+
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy as sp
 import seawater as sw
 from matplotlib.animation import FuncAnimation, PillowWriter
+
+from .forcing import Forcing
 
 # Constants
 YEAR = 365 * 24 * 3600
@@ -41,47 +45,17 @@ class BoxModel:
         return self.area * self.depth
 
     def q(self, DeltaT, DeltaS):
-        """Implements the AMOC volume transport q."""
-        # THC transport in m^3/sec as function of temperature and salinity
-        # difference between the boxes
+        """Implements the AMOC volume transport q with a linear density approximation."""
+        # THC transport in m^3/sec as function of temperature and salinity difference between the boxes
 
         rho_1_2_diff = self.alpha * DeltaT - self.beta * DeltaS
         flow = self.k * rho_1_2_diff
 
         return flow
 
-    def q80(self, prev_q, T, S):
-        return sw.eos80.dens(S, T, 0) - prev_q
-
-    def d_q_t(
-        self,
-        time,
-        time_max,
-        fn_forcing=None,
-        forcing_kwargs=dict(),
-        DeltaT=None,
-        DeltaS=None,
-    ):
-        """Implements the analytical derivative of q wrt.
-
-        t.
-        """
-        if DeltaT is None:
-            DeltaT = self.DeltaT
-        if DeltaS is None:
-            DeltaS = self.DeltaS
-
-        F_s = fn_forcing(time, time_max, **forcing_kwargs)
-
-        ret = -self.k * self.beta * 2 * (F_s - abs(self.q(DeltaT, DeltaS)) * DeltaS)
-        return ret
-
-    def d_DeltaS_t(self, F, DeltaT, DeltaS):
-        """Implementation according to Potsdam."""
-        return -2 * abs(self.q(DeltaT, DeltaS)) * DeltaS - 2 * F
-
-    def rho(self, T, S):
-        return self.rho0 * (1 - self.alpha * T + self.beta * S)
+    def q80(self, T1, T2, S1, S2):
+        """Implements the AMOC volume transport q with a nonlinear density approximation using EOS80."""
+        return self.k * (sw.eos80.dens(S1, T1, 0) - sw.eos80.dens(S2, T2, 0))
 
     def steady_states(self, F, X):
         """Implements the steady state solutions of the model."""
@@ -103,26 +77,24 @@ class BoxModel:
         Y = np.array([y1, y2, y3])
         return Y
 
-    def Fs_constant(self, time, time_max, flux=2, period=20, FW_min=-0.1, FW_max=5):
+    def F_constant(self, time, time_max, flux=2, period=20, FW_min=-0.1, FW_max=5):
         return flux * self.area * self.S0 / YEAR
 
-    def Fs_linear(self, time, time_max, period=20, FW_min=-0.1, FW_max=5):
+    def F_linear(self, time, time_max, period=20, FW_min=-0.1, FW_max=5):
         # Linear interpolation between minimum F and maximum F
         flux = FW_min + (FW_max - FW_min) * time / time_max
         return flux * self.area * self.S0 / YEAR
 
-    def Fs_sinusoidal(self, time, time_max, period=20, FW_min=-5, FW_max=5):
+    def F_sinusoidal(
+        self, time, time_max, period=20, FW_min=-5, FW_max=5, nonstationary=False
+    ):
         # Sinusoidal interpolation between minimum F and maximum F
         half_range = (FW_max - FW_min) / 2
-        amplitude_mult = time / time_max
-        flux = FW_min + half_range + np.sin(period * time / time_max) * half_range
+        amplitude_mult = time / time_max if nonstationary else 1
+        sin_arg = period * time / time_max
+        flux = FW_min + half_range + np.sin(sin_arg) * half_range
         ret = amplitude_mult * flux * self.area * self.S0 / YEAR
         return ret
-
-    # def Fs_meta(self, time, time_max, ls_F_type, ls_F_length, combination=None):
-    #     if combination is None:
-    #         combination = combine_forcing(0, time_max, ls_F_type, ls_F_length)
-    #     return combination[int(time)]
 
     def rhs_S(
         self,
@@ -133,23 +105,19 @@ class BoxModel:
         DeltaT=None,
         DeltaS=None,
     ):
-        """Implements the right-hand side of the derivative of S wrt.
-
-        t (time).
-        """
+        """Implements the right-hand side of the derivative of Delta S wrt t (time)."""
         if fn_forcing is None:
-            fn_forcing = self.Fs_sinusoidal
+            fn_forcing = self.F_sinusoidal
 
         DeltaT = self.DeltaT if DeltaT is None else DeltaT
         DeltaS = self.DeltaS if DeltaS is None else DeltaS
 
         F_s = fn_forcing(time, time_max, **forcing_kwargs)
-        # Optional: with S0
-        # rhs = -(2 * abs(self.q(DeltaT, DeltaS)) * DeltaS + 2 * F_s * self.S0)
-        rhs = -(2 * abs(self.q(DeltaT, DeltaS)) * DeltaS + 2 * F_s)
+        q = self.q(DeltaT, DeltaS)
+        rhs = -(2 * abs(q) * DeltaS + 2 * F_s)
 
         return rhs / self.V
-
+    
     def rhs_T(
         self,
         time,
@@ -159,22 +127,102 @@ class BoxModel:
         DeltaT=None,
         DeltaS=None,
     ):
-        """Implements the right-hand side of the derivative of T wrt.
-
-        t (time).
-        """
+        """Implements the right-hand side of the derivative of Delta T wrt t (time)."""
         if fn_forcing is None:
-            fn_forcing = self.Fs_sinusoidal
+            fn_forcing = self.F_sinusoidal
 
         DeltaT = self.DeltaT if DeltaT is None else DeltaT
         DeltaS = self.DeltaS if DeltaS is None else DeltaS
 
         F_s = fn_forcing(time, time_max, **forcing_kwargs)
-        # Optional: with S0
-        # rhs = -(2 * abs(self.q(DeltaT, DeltaS)) * DeltaS + 2 * F_s * self.S0)
-        rhs = -(2 * abs(self.q(DeltaT, DeltaS)) * DeltaT + 2 * F_s)
+        q = self.q(DeltaT, DeltaS)
+        rhs = -(2 * abs(q) * DeltaT + 2 * F_s)
 
         return rhs / self.V
+
+    def rhs_S1(
+        self,
+        time,
+        time_max,
+        S1,
+        S2,
+        T1,
+        T2,
+        fn_forcing=None,
+        forcing_kwargs=dict(),
+    ):
+        """Implements the right-hand side of the derivative of S_1 wrt t (time)."""
+        V_1 = self.V / 2
+
+        if fn_forcing is None:
+            fn_forcing = self.F_sinusoidal
+
+        F_s = fn_forcing(time, time_max, **forcing_kwargs)
+        q = self.q80(T1, T2, S1, S2)
+        return (abs(q) * (S2 - S1) - F_s) / V_1
+
+    def rhs_S2(
+        self,
+        time,
+        time_max,
+        S1,
+        S2,
+        T1,
+        T2,
+        fn_forcing=None,
+        forcing_kwargs=dict(),
+    ):
+        """Implements the right-hand side of the derivative of S_2 wrt t (time)."""
+        V_2 = self.V / 2
+
+        if fn_forcing is None:
+            fn_forcing = self.F_sinusoidal
+
+        F_s = fn_forcing(time, time_max, **forcing_kwargs)
+        q = self.q80(T1, T2, S1, S2)
+        return (abs(q) * (S1 - S2) + F_s) / V_2
+
+    def rhs_T1(
+        self,
+        time,
+        time_max,
+        S1,
+        S2,
+        T1,
+        T2,
+        fn_forcing=None,
+        forcing_kwargs=dict(),
+    ):
+        """Implements the right-hand side of the derivative of T_1 wrt t (time)."""
+        V_1 = self.V / 2
+
+        if fn_forcing is None:
+            fn_forcing = self.F_sinusoidal
+
+        F_t = fn_forcing(time, time_max, **forcing_kwargs)
+        q = self.q80(T1, T2, S1, S2)
+        return (abs(q) * (T2 - T1) - F_t) / V_1
+
+    def rhs_T2(
+        self,
+        time,
+        time_max,
+        S1,
+        S2,
+        T1,
+        T2,
+        fn_forcing=None,
+        forcing_kwargs=dict(),
+    ):
+        """Implements the right-hand side of the derivative of T_2 wrt t (time)."""
+        V_1 = self.V / 2
+
+        if fn_forcing is None:
+            fn_forcing = self.F_sinusoidal
+
+        F_t = fn_forcing(time, time_max, **forcing_kwargs)
+        q = self.q80(T1, T2, S1, S2)
+        return (abs(q) * (T1 - T2) + F_t) / V_1
 
     def simulate(self, Fs_range):
         """Computes the steady state solutions as well as the q values for the above values of
@@ -191,6 +239,16 @@ class BoxModel:
 
         return DeltaS_steady, q_steady
 
+    def forcing_from_str(self, forcing_name):
+        if forcing_name == "linear":
+            fn_forcing = self.F_linear
+        elif forcing_name == "sinusoidal":
+            fn_forcing = self.F_sinusoidal
+        elif forcing_name == "constant":
+            fn_forcing = self.F_constant
+
+        return fn_forcing
+
 
 def scale_Fs(Fs, area, S0, year):
     return Fs * area * S0 / year
@@ -198,6 +256,10 @@ def scale_Fs(Fs, area, S0, year):
 
 def Fs_to_m_per_year(S0, area):
     return S0 * area / YEAR
+
+
+def Ft_to_m_per_year(T0, area):
+    return T0 * area / YEAR
 
 
 def plot_steady(Fs_range, DeltaS_steady, q_steady, S0, area, normalize=True):
@@ -282,37 +344,24 @@ def plot_rhs(model, time, time_max, DeltaS_range, fig=None, ax=None):
     return fig, ax
 
 
-def get_time_series(
-    model,
-    forcing,
+def get_time_series_linear_(
+    model: BoxModel,
+    s_forcing: Forcing,
+    t_forcing: Forcing,
 ):
     teval = np.arange(0, model.years, model.years / 1000)
     tspan = (teval[0], teval[-1])
 
-    if forcing.forcing == "linear":
-        fn_forcing = model.Fs_linear
-    elif forcing.forcing == "sinusoidal":
-        fn_forcing = model.Fs_sinusoidal
-    elif forcing.forcing == "constant":
-        fn_forcing = model.Fs_constant
-    # elif forcing == "meta":
-    #     ls_F_type = ["s"]
-    #     ls_F_length = [time_max]
-    #     combination = combine_forcing(0, time_max, ls_F_type, ls_F_length)
-    #     fn_forcing = partial(
-    #         model.Fs_meta,
-    #         ls_F_type=ls_F_type,
-    #         ls_F_length=ls_F_length,
-    #         combination=combination,
-    #     )
+    Fs_forcing = model.forcing_from_str(s_forcing.forcing)
+    Ft_forcing = model.forcing_from_str(t_forcing.forcing)
 
     sol_DS = sp.integrate.solve_ivp(
-        fun=lambda time, DeltaS: model.rhs_S(
+        fun=lambda time, y: model.rhs_S(
             time,
             model.years,
-            fn_forcing=fn_forcing,
-            forcing_kwargs=forcing.forcing_kwargs,
-            DeltaS=DeltaS,
+            DeltaS=y,
+            fn_forcing=Fs_forcing,
+            forcing_kwargs=s_forcing.forcing_kwargs,
         ),
         vectorized=False,
         y0=[0],
@@ -320,13 +369,12 @@ def get_time_series(
         t_eval=teval,
         dense_output=True,
     )
-
     sol_DT = sp.integrate.solve_ivp(
         fun=lambda time, DeltaT: model.rhs_T(
             time,
             model.years,
-            fn_forcing=fn_forcing,
-            forcing_kwargs=forcing.forcing_kwargs,
+            fn_forcing=Ft_forcing,
+            forcing_kwargs=t_forcing.forcing_kwargs,
             DeltaT=DeltaT,
         ),
         vectorized=False,
@@ -339,44 +387,209 @@ def get_time_series(
     Time_DS, Time_DT = sol_DS.t, sol_DT.t
     DeltaS, DeltaT = sol_DS.y[0, :], sol_DT.y[0, :]
 
-    FWplot = np.zeros(len(Time_DS))
+    Fs_plot = np.zeros(len(Time_DS))
     qplot = np.zeros(len(Time_DS))
-
     for i, t in enumerate(Time_DS):
-        FWplot[i] = fn_forcing(t, model.years, **forcing.forcing_kwargs)
+        Fs_plot[i] = Fs_forcing(t, model.years, **s_forcing.forcing_kwargs)
         qplot[i] = model.q(DeltaT[i], DeltaS[i])
 
-    F = FWplot / Fs_to_m_per_year(model.S0, model.area)
-    y = qplot / Sv
+    F_s = Fs_plot / Fs_to_m_per_year(model.S0, model.area)
+    q = qplot / Sv
 
-    return Time_DS, Time_DT, F, y, DeltaS, DeltaT
+    series_dict = {
+        "times": [Time_DS, Time_DT],
+        "features": {
+            "variables": {"DeltaS": DeltaS, "DeltaT": DeltaT},
+            "forcings": {"Fs": F_s},
+        },
+        "q": q,
+        "latex": {
+            "variables": {"DeltaS": r"\(\Delta S\)", "DeltaT": r"\(\Delta T\)"},
+            "forcings": {"Fs": r"\(F_s\)"},
+        },
+    }
+
+    return series_dict
 
 
-def plot_time_series(Time_DS, Time_DT, F, y, DeltaS, DeltaT):
-    fig, ax = plt.subplots(nrows=2, ncols=2, figsize=(12, 10))
+def get_time_series_nonlinear_(
+    model: BoxModel,
+    s_forcing: Forcing,
+    t_forcing: Forcing,
+):
+    teval = np.arange(0, model.years, model.years / 1000)
+    tspan = (teval[0], teval[-1])
 
-    xs_S = Time_DS / YEAR / 1000
-    xs_T = Time_DT / YEAR / 1000
+    Fs_forcing = model.forcing_from_str(s_forcing.forcing)
+    Ft_forcing = model.forcing_from_str(t_forcing.forcing)
 
-    ax[0, 0].plot(xs_S, F, color="tab:blue")
-    ax[0, 0].plot(xs_S, Time_DS * 0, "k--", dashes=(10, 5), lw=0.5)
-    ax[0, 0].set_xlabel("Time (kyr)")
-    ax[0, 0].set_ylabel(r"\(F\) (m/yr)")
+    sol_S1 = sp.integrate.solve_ivp(
+        fun=lambda time, y: model.rhs_S1(
+            time,
+            model.years,
+            S1=y,
+            S2=model.S2,
+            T1=model.T1,
+            T2=model.T2,
+            fn_forcing=Fs_forcing,
+            forcing_kwargs=s_forcing.forcing_kwargs,
+        ),
+        vectorized=False,
+        y0=[0],
+        t_span=tspan,
+        t_eval=teval,
+        dense_output=True,
+    )
+    sol_S2 = sp.integrate.solve_ivp(
+        fun=lambda time, y: model.rhs_S2(
+            time,
+            model.years,
+            S1=model.S1,
+            S2=y,
+            T1=model.T1,
+            T2=model.T2,
+            fn_forcing=Fs_forcing,
+            forcing_kwargs=s_forcing.forcing_kwargs,
+        ),
+        vectorized=False,
+        y0=[0],
+        t_span=tspan,
+        t_eval=teval,
+        dense_output=True,
+    )
 
-    ax[0, 1].plot(xs_S, y, color="tab:blue")
-    ax[0, 1].plot(xs_S, Time_DS * 0, "k--", dashes=(10, 5), lw=0.5)
-    ax[0, 1].set_xlabel("Time (kyr)")
-    ax[0, 1].set_ylabel(r"\(q\) (Sv)")
+    sol_T1 = sp.integrate.solve_ivp(
+        fun=lambda time, y: model.rhs_T1(
+            time,
+            model.years,
+            S1=model.S1,
+            S2=model.S2,
+            T1=y,
+            T2=model.T2,
+            fn_forcing=Ft_forcing,
+            forcing_kwargs=t_forcing.forcing_kwargs,
+        ),
+        vectorized=False,
+        y0=[0],
+        t_span=tspan,
+        t_eval=teval,
+        dense_output=True,
+    )
+    sol_T2 = sp.integrate.solve_ivp(
+        fun=lambda time, y: model.rhs_T2(
+            time,
+            model.years,
+            S1=model.S1,
+            S2=model.S2,
+            T1=model.T1,
+            T2=y,
+            fn_forcing=Ft_forcing,
+            forcing_kwargs=t_forcing.forcing_kwargs,
+        ),
+        vectorized=False,
+        y0=[0],
+        t_span=tspan,
+        t_eval=teval,
+        dense_output=True,
+    )
 
-    ax[1, 0].plot(xs_S, DeltaS, color="tab:blue")
-    ax[1, 0].plot(xs_S, Time_DS * 0, "k--", dashes=(10, 5), lw=0.5)
-    ax[1, 0].set_xlabel("Time (kyr)")
-    ax[1, 0].set_ylabel(r"\(\Delta S\)")
+    Time_S1, Time_S2, Time_T1, Time_T2 = sol_S1.t, sol_S2.t, sol_T1.t, sol_T2.t
+    S1, S2, T1, T2 = sol_S1.y[0, :], sol_S2.y[0, :], sol_T1.y[0, :], sol_T2.y[0, :]
 
-    ax[1, 1].plot(xs_T, DeltaT, color="tab:blue")
-    ax[1, 1].plot(xs_T, Time_DT * 0, "k--", dashes=(10, 5), lw=0.5)
-    ax[1, 1].set_xlabel("Time (kyr)")
-    ax[1, 1].set_ylabel(r"\(\Delta T\)")
+    Fs_plot = np.zeros(len(Time_S1))
+    Ft_plot = np.zeros(len(Time_T1))
+    qplot = np.zeros(len(Time_S1))
+
+    for i, t in enumerate(Time_S1):
+        Fs_plot[i] = Fs_forcing(t, model.years, **s_forcing.forcing_kwargs)
+        Ft_plot[i] = Ft_forcing(t, model.years, **t_forcing.forcing_kwargs)
+        qplot[i] = model.q80(T1[i], T2[i], S1[i], S2[i])
+
+    F_s = Fs_plot / Fs_to_m_per_year(model.S0, model.area)
+    F_t = Ft_plot / Ft_to_m_per_year(model.T1, model.area)
+    q = qplot / Sv
+
+    series_dict = {
+        "times": [Time_S1, Time_S2, Time_T1, Time_T2],
+        "features": {
+            "variables": {"S1": S1, "S2": S2, "T1": T1, "T2": T2},
+            "forcings": {"Fs": F_s, "Ft": F_t},
+        },
+        "q": q,
+        "latex": {
+            "variables": {
+                "S1": r"\(S_1\)",
+                "S2": r"\(S_2\)",
+                "T1": r"\(T_1\)",
+                "T2": r"\(T_2\)",
+            },
+            "forcings": {"Fs": r"\(F_s\)", "Ft": r"\(F_t\)"},
+        },
+    }
+
+    return series_dict
+
+
+def get_time_series(
+    model: BoxModel,
+    s_forcing: Forcing,
+    t_forcing: Forcing,
+    nonlinear_density: bool,
+):
+    data = (
+        get_time_series_nonlinear_(model, s_forcing, t_forcing)
+        if nonlinear_density
+        else get_time_series_linear_(model, s_forcing, t_forcing)
+    )
+    return data
+
+
+def plot_time_series(series_dict):
+    variables = series_dict["features"]["variables"]
+    forcings = series_dict["features"]["forcings"]
+    latex_variables = series_dict["latex"]["variables"]
+    latex_forcings = series_dict["latex"]["forcings"]
+
+    total_plots = 1 + len(forcings) + len(variables)
+    ncols = 3
+    nrows = ceil(total_plots / ncols)
+    fig, _ = plt.subplots(nrows=nrows, ncols=ncols, figsize=(10, 10))
+
+    time = series_dict["times"][0]
+    x_label = "Time (kyr)"
+
+    xs_S = time / YEAR / 1000
+    q = series_dict["q"]
+
+    # Plot forcings
+    for ax, (F_name, F) in zip(fig.axes[: len(forcings)], forcings.items()):
+        ax.plot(
+            xs_S,
+            F,
+            label=latex_forcings[F_name],
+        )
+        ax.plot(xs_S, time * 0, "k--", dashes=(10, 5), lw=0.5)
+        ax.set_xlabel(x_label)
+        ax.set_ylabel(f"{latex_forcings[F_name]} (m/yr)")
+
+    # Plot the input variables
+    for ax, (var_name, value) in zip(
+        fig.axes[len(forcings) : (len(forcings) + len(variables))], variables.items()
+    ):
+        ax.plot(
+            xs_S,
+            value,
+            color="tab:blue",
+        )
+        ax.plot(xs_S, time * 0, "k--", dashes=(10, 5), lw=0.5)
+        ax.set_xlabel(x_label)
+        ax.set_ylabel(latex_variables[var_name])
+
+    # Plot q
+    fig.axes[-1].plot(xs_S, q, color="tab:blue")
+    fig.axes[-1].plot(xs_S, time * 0, "k--", dashes=(10, 5), lw=0.5)
+    fig.axes[-1].set_xlabel(x_label)
+    fig.axes[-1].set_ylabel(r"\(q\) (Sv)")
 
     fig.tight_layout()
 
@@ -390,9 +603,8 @@ def animation(filename, fig, ax, model):
     def animate(i):
         ax.clear()
         _, _, artists = get_time_series(model, model.years, fig=fig, ax=ax)
-        # model.T2 += 0.1
         model.T2 = sin_range[i]
-        ax.set_title(fr"\(T_1 = {model.T1}\), \(T_2 = {model.T2}\)")
+        ax.set_title(rf"\(T_1 = {model.T1}\), \(T_2 = {model.T2}\)")
         return artists
 
     anim = FuncAnimation(

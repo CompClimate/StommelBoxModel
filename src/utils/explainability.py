@@ -25,7 +25,7 @@ def explain(model, X, n_features):
     It is assumed that the input is in the form of a time series with
     input series length `n_features`.
     """
-    features = [fr"\(t - {i}\)" for i in reversed(range(1, n_features + 1))]
+    features = [rf"\(t - {i}\)" for i in reversed(range(1, n_features + 1))]
 
     e = shap.GradientExplainer(model, X)
 
@@ -38,8 +38,10 @@ def explain(model, X, n_features):
 def explain_captum(pl_model, attr_algorithm_cls, X, feature_names, **kwargs):
     attr_alg = attr_algorithm_cls(pl_model)
     attrs = attr_alg.attribute(X, **kwargs).cpu().detach()
+
     if len(attrs.size()) == 1:
         attrs = attrs.unsqueeze(1)
+
     return shap.Explanation(values=attrs, data=X, feature_names=feature_names)
 
 
@@ -74,9 +76,11 @@ def plot_attributions(
     plot_ext,
 ):
     alg_cls = eval(attr_algorithm)
+
     if autoregressive and feature_names is None:
-        feature_names = [fr"\(t - {i}\)" for i in reversed(range(1, input_dim + 1))]
+        feature_names = [rf"\(t - {i}\)" for i in reversed(range(1, input_dim + 1))]
     elif feature_names is not None:
-        feature_names = [fr"\({feature_name}\)" for feature_name in feature_names]
+        feature_names = [rf"\({feature_name}\)" for feature_name in feature_names]
+
     explain_fig = attribute(model, alg_cls, X, feature_names, ylabel)
     save_fig(explain_fig, save_path, alg_cls.__name__, plot_ext)

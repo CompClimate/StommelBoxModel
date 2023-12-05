@@ -1,0 +1,48 @@
+model:
+  _target_: src.models.time_series_module.Model
+  optimizer:
+    _target_: torch.optim.Adam
+    _partial_: true
+    lr: 0.001
+    weight_decay: 0.003
+  scheduler: null
+  loss_fun:
+    _target_: torch.nn.MSELoss
+  net:
+    _target_: src.models.components.dense.MLPModel
+    input_dim: 3
+    hidden_dim: 128
+    n_hidden: 2
+model/params/total: 17153
+model/params/trainable: 17153
+model/params/non_trainable: 0
+data:
+  batch_size: 32
+  test_size: 0.3
+  pin_memory: false
+  autoregressive: true
+  input_features: null
+  window_size: 10
+trainer:
+  _target_: lightning.pytorch.trainer.Trainer
+  default_root_dir: ${paths.output_dir}
+  min_epochs: 120
+  max_epochs: 120
+  accelerator: gpu
+  devices: 1
+  check_val_every_n_epoch: 1
+  deterministic: false
+callbacks:
+  training_path:
+    _target_: src.callbacks.training_path.TrainingPath
+    save_dir: ${paths.output_dir}
+    name: training_path/
+extras:
+  ignore_warnings: false
+  enforce_tags: true
+  print_config: true
+task_name: train
+tags:
+- dev
+ckpt_path: null
+seed: 42

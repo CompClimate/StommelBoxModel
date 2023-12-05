@@ -11,12 +11,14 @@ class MLPModel(nn.Module):
             nn.Linear(input_dim, hidden_dim),
             nn.ReLU(),
         )
-        self.hidden_layers = [
-            nn.Sequential(
-                nn.Linear(hidden_dim, hidden_dim),
-                nn.ReLU(),
+        self.hidden_layers = []
+        for _ in range(n_hidden):
+            self.hidden_layers.append(
+                nn.Sequential(
+                    nn.Linear(hidden_dim, hidden_dim),
+                    nn.ReLU(),
+                )
             )
-        ] * n_hidden
         self.hidden_layers = nn.Sequential(*self.hidden_layers)
         self.output_block = nn.Linear(hidden_dim, 1)
         self.explain_mode = False

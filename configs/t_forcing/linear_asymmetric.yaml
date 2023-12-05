@@ -1,0 +1,6 @@
+_target_: src.data.components.forcing.Forcing
+
+forcing: linear
+forcing_kwargs:
+  FW_min: -1
+  FW_max: 5

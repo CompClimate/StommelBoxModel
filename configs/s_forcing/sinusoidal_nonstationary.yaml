@@ -4,4 +4,5 @@ forcing: sinusoidal
 forcing_kwargs:
   FW_min: -10
   FW_max: 10
-  period: 10
+  period: 20
+  nonstationary: True

@@ -2,18 +2,19 @@
 
 defaults:
   - override /box_model: basic
-  - override /forcing: sinusoidal_onesided
   - override /data: autoregressive
   - override /model: mlp
-  - override /callbacks: none
-  - override /trainer: mps
+  - override /callbacks: training_path
+  - override /trainer: gpu
+
+seed: 42
 
 test: False
 
 plot_bias: True
 plot_data: True
 plot_gt_pred: True
-attr_algorithm: captum.attr.ShapleyValueSampling
+attr_algorithm: captum.attr.DeepLift
 feature_names: null
 attr_ylabel: "Shapley Values"
 

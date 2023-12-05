@@ -13,12 +13,15 @@ class BayesMLPModel(nn.Module):
             bl.BayesLinear(input_dim, hidden_dim),
             nn.ReLU(),
         )
-        self.hidden_layers = [
-            nn.Sequential(
-                bl.BayesLinear(hidden_dim, hidden_dim),
-                nn.ReLU(),
+
+        self.hidden_layers = []
+        for _ in range(n_hidden):
+            self.hidden_layers.append(
+                nn.Sequential(
+                    bl.BayesLinear(hidden_dim, hidden_dim),
+                    nn.ReLU(),
+                )
             )
-        ] * n_hidden
         self.hidden_layers = nn.Sequential(*self.hidden_layers)
         self.output_block = bl.BayesLinear(hidden_dim, 1)
         self.explain_mode = False

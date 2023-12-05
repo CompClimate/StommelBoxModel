@@ -1,6 +1,5 @@
 from typing import Any, Dict, Optional
 
-import hydra
 import torch
 from lightning import LightningDataModule
 from sklearn.model_selection import train_test_split
@@ -15,13 +14,15 @@ class TimeSeriesDatamodule(LightningDataModule):
     def __init__(
         self,
         box_model: box.BoxModel,
-        forcing: forcing.Forcing,
-        input_features,
-        autoregressive,
+        s_forcing: forcing.Forcing,
+        t_forcing: forcing.Forcing,
+        autoregressive: bool,
         test_size: float,
-        window_size=None,
+        nonlinear_density: bool = False,
+        window_size: Optional[int] = None,
         batch_size: int = 16,
-        feature_names=None,
+        input_features = None,
+        feature_names = None,
         num_workers: int = 0,
         pin_memory: bool = False,
     ) -> None:
@@ -29,25 +30,16 @@ class TimeSeriesDatamodule(LightningDataModule):
 
         self.save_hyperparameters(logger=False)
 
-        TimeDS, TimeDT, F, y, DeltaS, DeltaT = box.get_time_series(
+        series_dict = box.get_time_series(
             box_model,
-            forcing=forcing,
+            s_forcing=s_forcing,
+            t_forcing=t_forcing,
+            nonlinear_density=nonlinear_density,
         )
-        self.TimeDS, self.TimeDT, self.F, self.q, self.DeltaS, self.DeltaT = (
-            TimeDS,
-            TimeDT,
-            F,
-            y,
-            DeltaS,
-            DeltaT,
-        )
+        self.series_dict = series_dict
 
         X, y = data_utils.get_raw_data(
-            y,
-            F,
-            DeltaS,
-            DeltaT,
-            input_features,
+            series_dict,
             autoregressive,
             window_size,
         )
@@ -84,7 +76,9 @@ class TimeSeriesDatamodule(LightningDataModule):
                 raise RuntimeError(
                     f"Batch size ({self.hparams.batch_size}) is not divisible by the number of devices ({self.trainer.world_size})."
                 )
-            self.batch_size_per_device = self.hparams.batch_size // self.trainer.world_size
+            self.batch_size_per_device = (
+                self.hparams.batch_size // self.trainer.world_size
+            )
 
     def train_dataloader(self) -> DataLoader[Any]:
         """Create and return the train dataloader.

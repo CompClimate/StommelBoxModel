@@ -1,2 +1,4 @@
 training_path:
   _target_: src.callbacks.training_path.TrainingPath
+  save_dir: "${paths.output_dir}"
+  name: "training_path/"
