@@ -512,7 +512,7 @@ def get_time_series_nonlinear_(
         qplot[i] = model.q80(T1[i], T2[i], S1[i], S2[i])
 
     F_s = Fs_plot / Fs_to_m_per_year(model.S0, model.area)
-    F_t = Ft_plot / Ft_to_m_per_year(model.T1, model.area)
+    F_t = Ft_plot / Ft_to_m_per_year(model.T0, model.area)
     q = qplot / Sv
 
     series_dict = {
