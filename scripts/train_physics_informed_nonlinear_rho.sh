@@ -15,9 +15,7 @@ for s_forcing in $s_forcings; do
 				s_forcing=$s_forcing \
 				t_forcing=$t_forcing \
 				data=physics_informed \
-				density=nonlinear \
-				feature_names="['S_1', 'S_2', 'T_1', 'T_2', 'F_s', 'F_t']" \
-				++model.net.input_dim=6
+				density=nonlinear
 		done
 	done
 done

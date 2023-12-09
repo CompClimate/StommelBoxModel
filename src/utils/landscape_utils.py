@@ -240,7 +240,9 @@ class LossLandscape:
             self.loss_line_ = loss_line
             self.gradient_line_ = gradient_line
 
-    def plot(self, title, levels=20, ax=None, cmap="magma", surface=False, **kwargs):
+    def plot(
+        self, title=None, levels=20, ax=None, cmap="magma", surface=False, **kwargs
+    ):
         """Plots the landscape as a matplotlib contour plot.
 
         :return: A ``matplotlib`` Axes object.
@@ -278,8 +280,8 @@ class LossLandscape:
             ax.clabel(CS, inline=True, fontsize=8, fmt="%1.2f")
         else:
             plot = ax.plot(xs, ys)
-            ax.set_xlabel("a")
-            ax.set_ylabel("loss")
+            ax.set_xlabel(r"\(a\)")
+            ax.set_ylabel("Loss")
 
         return fig, ax
 
@@ -300,11 +302,11 @@ class LossLandscape:
                 writer.writerows(zip(self.a_grid_.numpy(), self.loss_line_))
 
 
-def weights_to_coordinates(coords, training_path, surf=True):
+def weights_to_coordinates(coords, training_path, surface=True):
     """Projects the training path onto the first two principal components using the
     pseudoinverse."""
     components = [coords.v0_]
-    if surf:
+    if surface:
         components.append(coords.v1_)
 
     comp_matrix = vectorize_weight_list_(components)
@@ -327,7 +329,7 @@ def plot_training_path(
     fig=None,
     ax=None,
     end=None,
-    surf=True,
+    surface=True,
     loss_history=[],
     **kwargs,
 ):
@@ -335,7 +337,7 @@ def plot_training_path(
     Args:
         `loss_history`: A list of loss values, each belonging to one item in ``training_path``.
     """
-    path = weights_to_coordinates(coords, training_path, surf=surf)
+    path = weights_to_coordinates(coords, training_path, surface=surface)
 
     if ax is None:
         fig, ax = plt.subplots(**kwargs)
@@ -344,7 +346,7 @@ def plot_training_path(
     end = path.shape[0] if end is None else end
     norm = plt.Normalize(0, end)
 
-    if surf:
+    if surface:
         xs = (path[:, 0],)
         ys = path[:, 1]
     else:

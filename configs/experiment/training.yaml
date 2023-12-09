@@ -9,15 +9,6 @@ defaults:
 
 seed: 42
 
-test: False
-
-plot_bias: True
-plot_data: True
-plot_gt_pred: True
-attr_algorithm: captum.attr.DeepLift
-feature_names: null
-attr_ylabel: "Shapley Values"
-
 trainer:
   min_epochs: 120
   max_epochs: 120

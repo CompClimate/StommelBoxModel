@@ -14,7 +14,6 @@ for forcing in $forcings; do
 			data=autoregressive \
 			s_forcing=$forcing \
 			tags="[$forcing, autoregressive, $model]" \
-			++model.net.input_dim=$window_size \
 			++data.window_size=$window_size
 	done
 done

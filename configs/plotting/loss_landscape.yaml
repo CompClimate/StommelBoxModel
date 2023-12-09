@@ -1,0 +1,8 @@
+loss_landscape:
+  plot: True
+  dim: 3
+  range: 1
+  points: 25
+  plot_training_path: True
+  title: "Loss Landscape"
+  relative_path: "training_path/training_path.pkl"

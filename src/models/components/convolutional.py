@@ -1,4 +1,5 @@
 import torch.nn as nn
+from captum.attr._utils.lrp_rules import EpsilonRule
 
 
 class ConvModel(nn.Module):
@@ -8,6 +9,9 @@ class ConvModel(nn.Module):
         self.input_block = nn.Conv1d(1, 16, 3)
         self.hidden_layers = nn.Conv1d(16, 16, 3)
         self.output_block = nn.Linear(6, 1)
+
+        self.input_block.rule = EpsilonRule()
+        self.hidden_layers.rule = EpsilonRule()
 
     def forward(self, x):
         x = self.input_block(x.unsqueeze(1))

@@ -3,6 +3,8 @@ import rootutils
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 
 from typing import Any, Dict, List, Optional, Tuple
+import os
+import os.path as osp
 
 import hydra
 import lightning as L
@@ -10,22 +12,37 @@ import torch
 from lightning import Callback, LightningModule, Trainer
 from lightning.pytorch.loggers import Logger
 from omegaconf import DictConfig, OmegaConf
+from captum.attr._utils.lrp_rules import IdentityRule
+import pickle as pkl
 
+from src.utils import (
+    RankedLogger,
+    extras,
+    get_metric_value,
+    instantiate_callbacks,
+    instantiate_loggers,
+    log_hyperparameters,
+    task_wrapper,
+)
+from src.models.time_series_module import Model
 from data.components.box_model import BoxModel, plot_time_series
 from data.components.forcing import Forcing
 from data.time_series_datamodule import TimeSeriesDatamodule
-from src.utils import (RankedLogger, extras, get_metric_value,
-                       instantiate_callbacks, instantiate_loggers,
-                       log_hyperparameters, task_wrapper)
 from utils.explainability import plot_attributions
 from utils.plot_utils import compute_bias, plot_gt_pred, save_fig, setup_plt
+from utils.landscape_utils import LossLandscape, RandomCoordinates, plot_training_path
 
 
 def ite(i, t, e):
     return t if i else e
 
 
+def equals(l, r):
+    return l == r
+
+
 OmegaConf.register_new_resolver("ifthenelse", ite)
+OmegaConf.register_new_resolver("equals", equals)
 
 
 setup_plt()
@@ -44,10 +61,11 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     :param cfg: A DictConfig configuration composed by Hydra.
     :return: A tuple with metrics and dict with all instantiated objects.
     """
-    # print(hydra.core.hydra_config.HydraConfig.get().runtime.choices.forcing)
+    # print(hydra.core.hydra_config.HydraConfig.get().runtime)
+    # print(hydra.core.hydra_config.HydraConfig.get().runtime.choices.density.nonlinear_density)
     # print(hydra.core.hydra_config.HydraConfig.get())
 
-    # set seed for random number generators in pytorch, numpy and python.random
+    # Set seed for random number generators in pytorch, numpy and python.random
     if cfg.get("seed"):
         L.seed_everything(cfg.seed, workers=True)
 
@@ -68,6 +86,13 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         **cfg.density,
         **cfg.data,
     )
+
+    input_dim = (
+        cfg.data.window_size
+        if cfg.data.autoregressive
+        else sum(map(lambda x: len(x), datamodule.series_dict["features"].values()))
+    )
+    cfg.model.net.input_dim = input_dim
 
     log.info(f"Instantiating model <{cfg.model._target_}>")
     model: LightningModule = hydra.utils.instantiate(cfg.model)
@@ -101,9 +126,14 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         log.info("Logging hyperparameters!")
         log_hyperparameters(object_dict)
 
+    if ckpt_name := cfg.get("ckpt_name"):
+        log.info("Loading model from checkpoint.")
+        ckpt_path = osp.join(working_dir, "csv", "version_0", "checkpoints", ckpt_name)
+        model = Model.load_from_checkpoint(ckpt_path)
+
     if cfg.get("train"):
         log.info("Starting training!")
-        trainer.fit(model=model, datamodule=datamodule, ckpt_path=cfg.get("ckpt_path"))
+        trainer.fit(model=model, datamodule=datamodule)
 
     train_metrics = trainer.callback_metrics
 
@@ -117,8 +147,6 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         log.info(f"Best ckpt path: {ckpt_path}")
 
     test_metrics = trainer.callback_metrics
-
-    # merge train and test metrics
     metric_dict = {**train_metrics, **test_metrics}
 
     X_train = torch.from_numpy(datamodule.X_train)
@@ -126,48 +154,103 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     X_test = torch.from_numpy(datamodule.X_test)
     y_test = torch.from_numpy(datamodule.y_test)
 
-    # Generate bias plot
-    if cfg.get("plot_bias"):
-        log.info("Plotting Bias plot...")
-        fig_bias = compute_bias(
-            model,
-            X_train,
-            y_train,
-            X_test,
-            y_test,
-        )
-        save_fig(fig_bias, working_dir, "bias", "pdf")
+    model.eval()
 
-    if cfg.get("plot_data"):
-        data_fig = plot_time_series(datamodule.series_dict)
-        save_fig(data_fig, working_dir, "data", "pdf")
+    if plot_cfg := cfg.get("plotting"):
+        # Generate bias plot
+        if (plot_bias := plot_cfg.get("bias")) and plot_bias.plot:
+            log.info("Plotting Bias plot...")
+            fig_bias = compute_bias(
+                model,
+                X_train,
+                y_train,
+                X_test,
+                y_test,
+            )
+            save_fig(fig_bias, working_dir, "bias", "pdf")
 
-    # Generate ground truth -- prediction plot
-    if cfg.get("plot_gt_pred"):
-        log.info("Plotting [Ground Truth - Prediction] plot...")
-        fig_gt_pred = plot_gt_pred(
-            model.cpu(),
-            X_train,
-            y_train,
-            X_test,
-            y_test,
-            cfg.get("show_change_points"),
-        )
-        save_fig(fig_gt_pred, working_dir, "pred-gt", "pdf")
+        if (plot_data := plot_cfg.get("data")) and plot_data:
+            data_fig = plot_time_series(datamodule.series_dict)
+            save_fig(data_fig, working_dir, "data", "pdf")
+
+        # Generate ground truth -- prediction plot
+        if (
+            groundtruth_prediction := plot_cfg.get("groundtruth_prediction")
+        ) and groundtruth_prediction.plot:
+            log.info("Plotting [Ground Truth - Prediction] plot...")
+            fig_gt_pred = plot_gt_pred(
+                model.cpu(),
+                X_train,
+                y_train,
+                X_test,
+                y_test,
+                plot_cfg.get("show_change_points"),
+            )
+            save_fig(fig_gt_pred, working_dir, "groundtruth-prediction", "pdf")
+
+        if (
+            loss_landscape_cfg := plot_cfg.get("loss_landscape")
+        ) and loss_landscape_cfg.plot:
+            log.info("Plotting loss landscape...")
+
+            with open(
+                osp.join(working_dir, loss_landscape_cfg.relative_path), "rb"
+            ) as f:
+                training_path = pkl.load(f)
+
+            for i in range(len(training_path)):
+                for j in range(len(training_path[i])):
+                    training_path[i][j] = training_path[i][j].cpu()
+
+            ll = LossLandscape(model, datamodule.train_dataloader())
+            coords = RandomCoordinates(training_path[0], loss_landscape_cfg.dim)
+
+            surface = loss_landscape_cfg.dim == 3
+
+            ll.compile(
+                loss_landscape_cfg.range,
+                loss_landscape_cfg.points,
+                coords,
+                model.loss_fun,
+                surface,
+            )
+            fig, ax = ll.plot(loss_landscape_cfg.get("title"), surface=surface)
+
+            if loss_landscape_cfg.plot_training_path:
+                fig, ax = plot_training_path(coords, training_path, fig, ax)
+
+            save_fig(fig, working_dir, "loss_landscape", "pdf")
 
     # Generate attribution plot
-    if cfg.get("attr_algorithm") is not None:
-        plot_attributions(
-            model,
-            torch.from_numpy(datamodule.X),
-            cfg.attr_algorithm,
-            cfg.feature_names,
-            cfg.data.autoregressive,
-            cfg.attr_ylabel,
-            cfg.model.net.input_dim,
-            working_dir,
-            "pdf",
+    if explain_cfg := cfg.get("explainability"):
+        data_cfg = cfg.data
+
+        autoregressive = data_cfg.autoregressive
+        feature_names = (
+            [rf"\(t - {i}\)" for i in reversed(range(1, input_dim + 1))]
+            if autoregressive
+            else list(datamodule.series_dict["latex"]["variables"].values())
+            + list(datamodule.series_dict["latex"]["forcings"].values())
         )
+        data = torch.from_numpy(datamodule.X)
+        # Ignore the loss function module and trainining/validation metrics in the Lightning module
+        model.loss_fun.rule = IdentityRule()
+        model.train_loss.rule = IdentityRule()
+        model.val_loss.rule = IdentityRule()
+        model.grad_norm_metric.rule = IdentityRule()
+
+        for algorithm_cfg in explain_cfg.values():
+            algorithm = hydra.utils.instantiate(algorithm_cfg.algorithm, model)
+            ylabel = algorithm_cfg.get("ylabel")
+            plot_attributions(
+                model,
+                data,
+                algorithm,
+                feature_names,
+                ylabel,
+                working_dir,
+                "pdf",
+            )
 
     return metric_dict, object_dict
 
@@ -179,19 +262,17 @@ def main(cfg: DictConfig) -> Optional[float]:
     :param cfg: DictConfig configuration composed by Hydra.
     :return: Optional[float] with optimized metric value.
     """
-    # apply extra utilities
-    # (e.g. ask for tags if none are provided in cfg, print cfg tree, etc.)
     extras(cfg)
 
-    # train the model
+    # Train the model
     metric_dict, _ = train(cfg)
 
-    # safely retrieve metric value for hydra-based hyperparameter optimization
+    # Safely retrieve metric value for hydra-based hyperparameter optimization
     metric_value = get_metric_value(
         metric_dict=metric_dict, metric_name=cfg.get("optimized_metric")
     )
 
-    # return optimized metric
+    # Return optimized metric
     return metric_value
 
 

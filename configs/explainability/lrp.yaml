@@ -1,0 +1,4 @@
+lrp:
+  algorithm:
+    _target_: captum.attr.LRP
+  # ylabel: "eps"

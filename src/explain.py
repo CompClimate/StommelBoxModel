@@ -11,9 +11,15 @@ from omegaconf import DictConfig
 from data.components.box_model import BoxModel
 from data.components.forcing import Forcing
 from data.time_series_datamodule import TimeSeriesDatamodule
-from src.utils import (RankedLogger, extras, get_metric_value,
-                       instantiate_callbacks, instantiate_loggers,
-                       log_hyperparameters, task_wrapper)
+from src.utils import (
+    RankedLogger,
+    extras,
+    get_metric_value,
+    instantiate_callbacks,
+    instantiate_loggers,
+    log_hyperparameters,
+    task_wrapper,
+)
 
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 # ------------------------------------------------------------------------------------ #

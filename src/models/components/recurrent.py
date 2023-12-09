@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from captum.attr._utils.lrp_rules import EpsilonRule
 
 
 class RNNModel(nn.Module):
@@ -41,6 +42,9 @@ class RNNModel(nn.Module):
             dropout=rnn_dropout,
             bidirectional=bidirectional,
         )
+
+        self.rnn.rule = EpsilonRule()
+
         # if quantify_uncertainty > 0.0:
         # self.init_second_rnn_()
         self.fc = nn.Linear(hidden_dim * 2 if bidirectional else hidden_dim, output_dim)
@@ -55,6 +59,7 @@ class RNNModel(nn.Module):
             dropout=self.rnn_dropout,
             bidirectional=self.bidirectional,
         )
+        self.rnn2.rule = EpsilonRule()
 
     def forward(self, x):
         x, _ = self.rnn(x)

@@ -117,7 +117,7 @@ class BoxModel:
         rhs = -(2 * abs(q) * DeltaS + 2 * F_s)
 
         return rhs / self.V
-    
+
     def rhs_T(
         self,
         time,
@@ -403,6 +403,12 @@ def get_time_series_linear_(
             "forcings": {"Fs": F_s},
         },
         "q": q,
+        "units": {
+            "q": "Sv",
+            "DeltaS": "ppt",
+            "DeltaT": r"\(\tccentigrade\)",
+            "Fs": "m / yr",
+        },
         "latex": {
             "variables": {"DeltaS": r"\(\Delta S\)", "DeltaT": r"\(\Delta T\)"},
             "forcings": {"Fs": r"\(F_s\)"},
@@ -516,6 +522,15 @@ def get_time_series_nonlinear_(
             "forcings": {"Fs": F_s, "Ft": F_t},
         },
         "q": q,
+        "units": {
+            "q": "Sv",
+            "S1": "ppt",
+            "S2": "ppt",
+            "T1": r"\(\tccentigrade\)",
+            "T2": r"\(\tccentigrade\)",
+            "Fs": "m / year",
+            "Ft": r"\(\tccentigrade\) / year",
+        },
         "latex": {
             "variables": {
                 "S1": r"\(S_1\)",
@@ -549,11 +564,9 @@ def plot_time_series(series_dict):
     forcings = series_dict["features"]["forcings"]
     latex_variables = series_dict["latex"]["variables"]
     latex_forcings = series_dict["latex"]["forcings"]
+    units = series_dict["units"]
 
-    total_plots = 1 + len(forcings) + len(variables)
-    ncols = 3
-    nrows = ceil(total_plots / ncols)
-    fig, _ = plt.subplots(nrows=nrows, ncols=ncols, figsize=(10, 10))
+    fig, ax = plt.subplots(ncols=3, figsize=(12, 12))
 
     time = series_dict["times"][0]
     x_label = "Time (kyr)"
@@ -561,35 +574,42 @@ def plot_time_series(series_dict):
     xs_S = time / YEAR / 1000
     q = series_dict["q"]
 
+    font = {"size": 15}
+
     # Plot forcings
-    for ax, (F_name, F) in zip(fig.axes[: len(forcings)], forcings.items()):
-        ax.plot(
+    ax_F = ax[0]
+    ax_F.set_xlabel(x_label, fontdict=font)
+    # ax_F.set_ylabel("m / yr", fontdict=font)
+    for F_name, F in forcings.items():
+        ax_F.plot(
             xs_S,
             F,
-            label=latex_forcings[F_name],
+            label=f"{latex_forcings[F_name]} ({units[F_name]})",
         )
-        ax.plot(xs_S, time * 0, "k--", dashes=(10, 5), lw=0.5)
-        ax.set_xlabel(x_label)
-        ax.set_ylabel(f"{latex_forcings[F_name]} (m/yr)")
+        ax_F.plot(xs_S, time * 0, "k--", dashes=(10, 5), lw=0.5)
+    ax[0].set_box_aspect(1)
+    ax[0].legend()
 
     # Plot the input variables
-    for ax, (var_name, value) in zip(
-        fig.axes[len(forcings) : (len(forcings) + len(variables))], variables.items()
-    ):
-        ax.plot(
+    ax[1].set_xlabel(x_label, fontdict=font)
+    # ax[1].set_ylabel("ppt", fontdict=font)
+    for var_name, value in variables.items():
+        ax[1].plot(
             xs_S,
             value,
-            color="tab:blue",
+            label=f"{latex_variables[var_name]} ({units[var_name]})",
         )
-        ax.plot(xs_S, time * 0, "k--", dashes=(10, 5), lw=0.5)
-        ax.set_xlabel(x_label)
-        ax.set_ylabel(latex_variables[var_name])
+        ax[1].plot(xs_S, time * 0, "k--", dashes=(10, 5), lw=0.5)
+    ax[1].set_box_aspect(1)
+    ax[1].legend()
 
     # Plot q
-    fig.axes[-1].plot(xs_S, q, color="tab:blue")
-    fig.axes[-1].plot(xs_S, time * 0, "k--", dashes=(10, 5), lw=0.5)
-    fig.axes[-1].set_xlabel(x_label)
-    fig.axes[-1].set_ylabel(r"\(q\) (Sv)")
+    ax[2]
+    ax[2].plot(xs_S, q)
+    ax[2].plot(xs_S, time * 0, "k--", dashes=(10, 5), lw=0.5)
+    ax[2].set_xlabel(x_label, fontdict=font)
+    ax[2].set_ylabel(rf"\(q\) ({units['q']})", fontdict=font)
+    ax[2].set_box_aspect(1)
 
     fig.tight_layout()
 

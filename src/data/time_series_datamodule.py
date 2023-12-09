@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional
+from typing import Any, List, Optional
 
 import torch
 from lightning import LightningDataModule
@@ -21,10 +21,6 @@ class TimeSeriesDatamodule(LightningDataModule):
         nonlinear_density: bool = False,
         window_size: Optional[int] = None,
         batch_size: int = 16,
-        input_features = None,
-        feature_names = None,
-        num_workers: int = 0,
-        pin_memory: bool = False,
     ) -> None:
         super().__init__()
 
@@ -88,8 +84,8 @@ class TimeSeriesDatamodule(LightningDataModule):
         return DataLoader(
             dataset=self.data_train,
             batch_size=self.batch_size_per_device,
-            num_workers=self.hparams.num_workers,
-            pin_memory=self.hparams.pin_memory,
+            # num_workers=self.hparams.num_workers,
+            # pin_memory=self.hparams.pin_memory,
             shuffle=True,
         )
 
@@ -101,8 +97,8 @@ class TimeSeriesDatamodule(LightningDataModule):
         return DataLoader(
             dataset=self.data_val,
             batch_size=self.batch_size_per_device,
-            num_workers=self.hparams.num_workers,
-            pin_memory=self.hparams.pin_memory,
+            # num_workers=self.hparams.num_workers,
+            # pin_memory=self.hparams.pin_memory,
             shuffle=False,
         )
 
@@ -110,7 +106,7 @@ class TimeSeriesDatamodule(LightningDataModule):
         return DataLoader(
             dataset=self.data_val,
             batch_size=self.batch_size_per_device,
-            num_workers=self.hparams.num_workers,
-            pin_memory=self.hparams.pin_memory,
+            # num_workers=self.hparams.num_workers,
+            # pin_memory=self.hparams.pin_memory,
             shuffle=False,
         )

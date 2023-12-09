@@ -18,7 +18,6 @@ for s_forcing in $s_forcings; do
 				t_forcing=$t_forcing \
 				density=nonlinear \
 				tags="['$forcing', 'autoregressive', '$model']" \
-				++model.net.input_dim=$window_size \
 				++data.window_size=$window_size
 		done
 	done

@@ -17,6 +17,7 @@ def setup_plt():
             "text.latex.preamble": r"""
     \usepackage{amsmath}
     \usepackage{amssymb}
+    \usepackage{textcomp,mathcomp}
     """,
         }
     )
@@ -160,6 +161,9 @@ def heatmap(
 
 def compute_bias(pl_model, X_train, y_train, X_test, y_test):
     with torch.no_grad():
+        device = pl_model.device
+        pl_model.cpu()
+
         train_pred_mean, train_pred_std = pl_model(X_train)
         test_pred_mean, test_pred_std = pl_model(X_test)
 
@@ -177,28 +181,32 @@ def compute_bias(pl_model, X_train, y_train, X_test, y_test):
 
     fig, ax = plt.subplots(figsize=(10, 8))
 
+    font = {"size": 15}
+
     xs_time_train = list(range(1, len(y_train) + 1))
     xs_time_test = list(range(len(y_train), len(y_train) + len(y_test)))
 
-    ax.plot(xs_time_train, train_bias.cpu(), label="Bias: Training Set")
-    ax.plot(xs_time_test, test_bias.cpu(), label="Bias: Test Set")
+    ax.plot(xs_time_train, train_bias, label="Bias: Training Set")
+    ax.plot(xs_time_test, test_bias, label="Bias: Test Set")
 
     ax.fill_between(
         xs_time_train,
-        (train_bias - train_pred_std).cpu(),
-        (train_bias + train_pred_std).cpu(),
+        train_bias - train_pred_std,
+        train_bias + train_pred_std,
         alpha=0.3,
     )
     ax.fill_between(
         xs_time_test,
-        (test_bias - test_pred_std).cpu(),
-        (test_bias + test_pred_std).cpu(),
+        test_bias - test_pred_std,
+        test_bias + test_pred_std,
         alpha=0.3,
     )
 
-    ax.set_xlabel(r"\(t\)")
-    ax.set_ylabel(r"\(\hat{q} - q\)")
+    ax.set_xlabel(r"\(t\)", fontdict=font)
+    ax.set_ylabel(r"\(\hat{q} - q\)", fontdict=font)
     ax.legend()
+
+    pl_model.to(device)
 
     return fig
 
@@ -218,28 +226,31 @@ def plot_gt_pred(pl_model, X_train, y_train, X_test, y_test, show_change_points=
         result = algo.predict(pen=10)
 
     fig, ax = plt.subplots()
+    font = {"size": 15}
+
     xs_time_train = list(range(1, len(train_pred_mean) + 1))
     xs_time_test = list(
         range(len(train_pred_mean), len(train_pred_mean) + len(test_pred_mean))
     )
 
     ax.plot(
-        xs_time_train, y_train, label="Ground Truth: Training Set", color="tab:blue"
+        xs_time_train,
+        y_train,
+        label="Ground Truth: Training Set",
+        color="tab:blue",
     )
     ax.plot(
         xs_time_train,
         train_pred_mean,
         label="Prediction: Training Set",
-        color="tab:blue",
-        linestyle=":",
+        color="tab:green",
     )
     ax.plot(xs_time_test, y_test, label="Ground Truth: Test Set", color="tab:orange")
     ax.plot(
         xs_time_test,
         test_pred_mean,
         label="Prediction: Test Set",
-        color="tab:orange",
-        linestyle=":",
+        color="tab:red",
     )
     ax.fill_between(
         xs_time_train,
@@ -257,8 +268,8 @@ def plot_gt_pred(pl_model, X_train, y_train, X_test, y_test, show_change_points=
     if show_change_points:
         ax.vlines(result, y_test.min(), y_test.max(), ls="--")
 
-    ax.set_xlabel(r"\(t\)")
-    ax.set_ylabel(r"\(q\) (Sv)")
+    ax.set_xlabel(r"\(t\)", fontdict=font)
+    ax.set_ylabel(r"\(q\) (Sv)", fontdict=font)
     ax.legend()
 
     return fig

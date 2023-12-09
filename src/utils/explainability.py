@@ -1,11 +1,18 @@
 import os.path as osp
+from enum import Enum
 
 import captum
 import captum.attr
+from captum.attr._utils.visualization import visualize_timeseries_attr
 import matplotlib.pyplot as plt
 import shap
 
 from utils.plot_utils import heatmap
+
+
+class AttributionMethod(Enum):
+    shap_heatmap = 1
+    captum_heatmap = 2
 
 
 class explain_mode:
@@ -35,9 +42,8 @@ def explain(model, X, n_features):
     return shap_values
 
 
-def explain_captum(pl_model, attr_algorithm_cls, X, feature_names, **kwargs):
-    attr_alg = attr_algorithm_cls(pl_model)
-    attrs = attr_alg.attribute(X, **kwargs).cpu().detach()
+def explain_captum(algorithm, X, feature_names, **kwargs):
+    attrs = algorithm.attribute(X, **kwargs).cpu().detach()
 
     if len(attrs.size()) == 1:
         attrs = attrs.unsqueeze(1)
@@ -49,17 +55,32 @@ def save_fig(fig, save_path, name, ext):
     fig.savefig(osp.join(save_path, f"{name}.{ext}"))
 
 
-def attribute(pl_model, alg_cls, X, feature_names, ylabel):
+def attribute(pl_model, algorithm, X, feature_names, ylabel, method="captum_heatmap"):
     with explain_mode(pl_model):
         attrs = explain_captum(
-            pl_model,
-            alg_cls,
+            algorithm,
             X,
             feature_names,
         )
 
     fig, ax = plt.subplots()
-    heatmap(attrs, fig=fig, ax=ax, ylabel=ylabel, show=False)
+
+    method = AttributionMethod[method]
+    if method == AttributionMethod.captum_heatmap:
+        fig, axes = visualize_timeseries_attr(
+            attrs.values,
+            X,
+            method="overlay_individual",
+            channel_labels=[ylabel] * attrs.values.shape[1],
+        )
+        for ax, feature_name in zip(axes, feature_names):
+            ax.set_title(feature_name)
+    elif method == AttributionMethod.shap_heatmap:
+        heatmap(attrs, fig=fig, ax=ax, ylabel=ylabel, show=False)
+    else:
+        raise ValueError("Invalid attribution visualization method")
+
+    fig.tight_layout()
 
     return fig
 
@@ -67,20 +88,11 @@ def attribute(pl_model, alg_cls, X, feature_names, ylabel):
 def plot_attributions(
     model,
     X,
-    attr_algorithm,
+    algorithm,
     feature_names,
-    autoregressive,
     ylabel,
-    input_dim,
     save_path,
     plot_ext,
 ):
-    alg_cls = eval(attr_algorithm)
-
-    if autoregressive and feature_names is None:
-        feature_names = [rf"\(t - {i}\)" for i in reversed(range(1, input_dim + 1))]
-    elif feature_names is not None:
-        feature_names = [rf"\({feature_name}\)" for feature_name in feature_names]
-
-    explain_fig = attribute(model, alg_cls, X, feature_names, ylabel)
-    save_fig(explain_fig, save_path, alg_cls.__name__, plot_ext)
+    explain_fig = attribute(model, algorithm, X, feature_names, ylabel)
+    save_fig(explain_fig, save_path, algorithm.__class__.__name__, plot_ext)
