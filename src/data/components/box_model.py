@@ -566,7 +566,7 @@ def plot_time_series(series_dict):
     latex_forcings = series_dict["latex"]["forcings"]
     units = series_dict["units"]
 
-    fig, ax = plt.subplots(ncols=3, figsize=(12, 12))
+    fig, ax = plt.subplots(ncols=3, figsize=(12, 8))
 
     time = series_dict["times"][0]
     x_label = "Time (kyr)"
@@ -574,12 +574,9 @@ def plot_time_series(series_dict):
     xs_S = time / YEAR / 1000
     q = series_dict["q"]
 
-    font = {"size": 15}
-
     # Plot forcings
     ax_F = ax[0]
-    ax_F.set_xlabel(x_label, fontdict=font)
-    # ax_F.set_ylabel("m / yr", fontdict=font)
+    ax_F.set_xlabel(x_label)
     for F_name, F in forcings.items():
         ax_F.plot(
             xs_S,
@@ -591,8 +588,8 @@ def plot_time_series(series_dict):
     ax[0].legend()
 
     # Plot the input variables
-    ax[1].set_xlabel(x_label, fontdict=font)
-    # ax[1].set_ylabel("ppt", fontdict=font)
+    ax[1].set_xlabel(x_label)
+    # ax[1].set_ylabel("ppt")
     for var_name, value in variables.items():
         ax[1].plot(
             xs_S,
@@ -607,8 +604,8 @@ def plot_time_series(series_dict):
     ax[2]
     ax[2].plot(xs_S, q)
     ax[2].plot(xs_S, time * 0, "k--", dashes=(10, 5), lw=0.5)
-    ax[2].set_xlabel(x_label, fontdict=font)
-    ax[2].set_ylabel(rf"\(q\) ({units['q']})", fontdict=font)
+    ax[2].set_xlabel(x_label)
+    ax[2].set_ylabel(rf"\(q\) ({units['q']})")
     ax[2].set_box_aspect(1)
 
     fig.tight_layout()

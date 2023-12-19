@@ -6,6 +6,7 @@ import captum.attr
 from captum.attr._utils.visualization import visualize_timeseries_attr
 import matplotlib.pyplot as plt
 import shap
+from shap.plots import colors
 
 from utils.plot_utils import heatmap
 
@@ -55,7 +56,7 @@ def save_fig(fig, save_path, name, ext):
     fig.savefig(osp.join(save_path, f"{name}.{ext}"))
 
 
-def attribute(pl_model, algorithm, X, feature_names, ylabel, method="captum_heatmap"):
+def attribute(pl_model, algorithm, X, feature_names, ylabel, method="shap_heatmap"):
     with explain_mode(pl_model):
         attrs = explain_captum(
             algorithm,
@@ -69,9 +70,12 @@ def attribute(pl_model, algorithm, X, feature_names, ylabel, method="captum_heat
     if method == AttributionMethod.captum_heatmap:
         fig, axes = visualize_timeseries_attr(
             attrs.values,
-            X,
+            X.numpy(),
             method="overlay_individual",
             channel_labels=[ylabel] * attrs.values.shape[1],
+            cmap=colors.red_white_blue,
+            show_colorbar=True,
+            fig_size=(6, 12),
         )
         for ax, feature_name in zip(axes, feature_names):
             ax.set_title(feature_name)
