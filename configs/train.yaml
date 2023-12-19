@@ -21,7 +21,7 @@ defaults:
     - data
     - groundtruth_prediction
     - bias
-    - loss_landscape
+    # - loss_landscape
   - experiment: null
   - hparams_search: null
   - optional local: default
