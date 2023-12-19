@@ -2,19 +2,23 @@ import rootutils
 
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 
-from typing import Any, Dict, List, Optional, Tuple
 import os
 import os.path as osp
+import pickle as pkl
+from typing import Any, Dict, List, Optional, Tuple
 
 import hydra
 import lightning as L
 import torch
+from captum.attr._utils.lrp_rules import IdentityRule
 from lightning import Callback, LightningModule, Trainer
 from lightning.pytorch.loggers import Logger
 from omegaconf import DictConfig, OmegaConf
-from captum.attr._utils.lrp_rules import IdentityRule
-import pickle as pkl
 
+from data.components.box_model import BoxModel, plot_time_series
+from data.components.forcing import Forcing
+from data.time_series_datamodule import TimeSeriesDatamodule
+from src.models.time_series_module import Model
 from src.utils import (
     RankedLogger,
     extras,
@@ -24,13 +28,9 @@ from src.utils import (
     log_hyperparameters,
     task_wrapper,
 )
-from src.models.time_series_module import Model
-from data.components.box_model import BoxModel, plot_time_series
-from data.components.forcing import Forcing
-from data.time_series_datamodule import TimeSeriesDatamodule
 from utils.explainability import plot_attributions
-from utils.plot_utils import compute_bias, plot_gt_pred, save_fig, setup_plt
 from utils.landscape_utils import LossLandscape, RandomCoordinates, plot_training_path
+from utils.plot_utils import compute_bias, plot_gt_pred, save_fig, setup_plt
 
 
 def ite(i, t, e):

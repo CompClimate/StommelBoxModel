@@ -3,9 +3,9 @@ from enum import Enum
 
 import captum
 import captum.attr
-from captum.attr._utils.visualization import visualize_timeseries_attr
 import matplotlib.pyplot as plt
 import shap
+from captum.attr._utils.visualization import visualize_timeseries_attr
 from shap.plots import colors
 
 from utils.plot_utils import heatmap
