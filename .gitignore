@@ -81,6 +81,8 @@ RcTorch/
 logs/*
 !logs/.gitkeep
 
+dummy_logs/
+
 .github/
 
 .hydra/
