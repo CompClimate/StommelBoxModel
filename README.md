@@ -15,7 +15,7 @@ The model configurations are defined in `configs/model/` and the box model confi
 
 Training is invoked using a simple command-line call:
 ```python
-python train.py experiment=... <kwargs>
+python src/train.py experiment=... <kwargs>
 ```
 By default, log files for an experiment are saved in `logs/`. Default parameters when `<kwargs>` is empty are found in `configs/train.yaml`.
 
@@ -23,7 +23,7 @@ By default, log files for an experiment are saved in `logs/`. Default parameters
 
 Evaluating a PyTorch model according to a set of metrics is similar to invoking training:
 ```python
-python eval.py experiment=... <kwargs>
+python src/eval.py experiment=... <kwargs>
 ```
 
 # Scenario Generation
