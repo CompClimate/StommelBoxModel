@@ -1,0 +1,25 @@
+# @package _global_
+
+defaults:
+  - _self_
+  - model: mlp
+  - model/optimizer: adam
+  - model/scheduler: null
+  - data: physics_informed
+  - debug: null
+  - experiment: null
+  - extras: default
+  - hparams_search: null
+  - hydra: default
+  - optional local: default
+  - logger: many_loggers
+  - paths: default
+  - trainer: gpu
+
+task_name: "train"
+job_name: "${now:%Y-%m-%d}_${now:%H-%M-%S}"
+train: True
+test: False
+ckpt_path: null
+seed: null
+
