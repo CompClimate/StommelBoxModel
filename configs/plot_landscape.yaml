@@ -1,0 +1,23 @@
+# @package _global_
+
+defaults:
+  - _self_
+  - data: physics_informed
+  - box_model: basic
+  - forcing: constant
+  - model: mlp
+  - callbacks: default
+  - paths: default
+  - extras: default
+  - hydra: default
+
+seed: 42
+
+checkpoint_path: null
+training_path: null
+dim: 3
+range: 1
+points: 25
+
+tags: ["plot_landscape"]
+task_name: train
