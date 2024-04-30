@@ -89,6 +89,8 @@ multiruns/
 
 .hydra/
 
-data/
+/data/
 
-plots/
+/plots/
+
+/bnn_logs

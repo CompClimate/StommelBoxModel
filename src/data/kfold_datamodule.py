@@ -16,11 +16,6 @@ class LitKFoldDataModule(LightningDataModule):
         super().__init__()
 
         self.save_hyperparameters(logger=False, ignore=["dataset"])
-
-        # num_splits = 10 means our dataset will be split to 10 parts
-        # so we train on 90% of the data and validate on 10%
-        # assert 1 <= k <= num_splits, "Incorrect fold number"
-
         self.dataset = dataset
 
     def setup(self, k: int = 1, stage: str = None):
