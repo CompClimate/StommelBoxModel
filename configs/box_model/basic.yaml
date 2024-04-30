@@ -1,0 +1,14 @@
+_target_: src.data.components.box_model.BoxModel
+
+S0: 35.0
+T0: 24.0
+S1: 12
+S2: 20
+T1: 1
+T2: 10
+area: 2500000000000000 # (50000.0e3) ** 2
+k: 10000000000 # 10e9
+depth: 4000
+alpha: 0.2
+beta: 0.8
+years: 150000

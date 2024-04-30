@@ -1,0 +1,12 @@
+# @package _global_
+
+seed: 42
+
+trainer:
+  min_epochs: 120
+  max_epochs: 120
+
+model:
+  optimizer:
+    lr: 0.001
+    weight_decay: 3e-3

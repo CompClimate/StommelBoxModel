@@ -1,0 +1,26 @@
+# @package _global_
+
+defaults:
+  - _self_
+  - data: physics_informed
+  - model: mlp
+  - model/optimizer: adam
+  - model/scheduler: null
+  - model/loss_fun: mse
+  - callbacks: none
+  - logger: null
+  - trainer: default
+  - paths: default
+  - extras: default
+  - hydra: default
+  - experiment: null
+  - hparams_search: null
+  - optional local: default
+  - debug: null
+  - xai: default
+
+task_name: "explain"
+job_name: "${now:%Y-%m-%d}_${now:%H-%M-%S}"
+ckpt_path: null
+seed: null
+save_fname: explanations.csv

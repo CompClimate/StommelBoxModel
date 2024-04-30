@@ -1,0 +1,3 @@
+shap:
+  algorithm:
+    _target_: shap.DeepExplainer

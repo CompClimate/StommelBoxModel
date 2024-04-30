@@ -1,0 +1,13 @@
+_target_: src.models.module.Model
+
+loss_fun:
+  _target_: torch.nn.MSELoss
+
+kl_weight: 0.001
+
+net:
+  _target_: src.models.components.bayes.BNNTorch
+  input_dim: 3
+  hidden_dim: 128
+  n_hidden: 2
+  num_MC: 50

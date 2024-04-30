@@ -1,0 +1,10 @@
+_target_: src.models.module.Model
+
+loss_fun:
+  _target_: torch.nn.MSELoss
+
+net:
+  _target_: src.models.components.convolutional.ConvModel
+  input_dim: null
+  hidden_dim: null
+  n_hidden: null

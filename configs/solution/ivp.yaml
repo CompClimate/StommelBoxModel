@@ -1,0 +1,4 @@
+integration_method: solve_ivp
+kwargs:
+  method: RK45
+  dense_output: True

@@ -1,0 +1,61 @@
+version: "3"
+
+tasks:
+  format:
+    cmds:
+      - ruff check . --select I --fix
+      - ruff format .
+
+  clean:
+    cmds:
+      - rm -rf dist
+      - find . -type f -name "*.DS_Store" -ls -delete
+      - find . | grep -E "(__pycache__|\.pyc|\.pyo)" | xargs rm -rf
+      - find . | grep -E ".pytest_cache" | xargs rm -rf
+      - find . | grep -E ".ipynb_checkpoints" | xargs rm -rf
+      - rm -f .coverage
+
+  clean-logs: rm -rf logs/**
+
+  sync:
+    cmds:
+      - git pull
+      - git pull origin main
+
+  train: python src/train.py {{.CLI_ARGS}}
+
+  eval: python src/eval.py {{.CLI_ARGS}}
+
+  explain: python src/explain.py {{.CLI_ARGS}}
+  # explain:
+  #   cmds:
+  #     - |
+  #       python scripts/plot_csv.py \
+  #         --csv_filenames='["logs/explain/runs/F5_hifreq_pi_de_shap_deeplift/explanations.csv"]' \
+  #         --text.usetex=True - \
+  #         shap_heatmap '["shap_1","shap_2","shap_3","shap_4","shap_5","shap_6"]' \
+  #         --feature_names='["\(S_1\)","\(S_2\)","\(T_1\)","\(T_2\)","\(F_s\)","\(F_t\)"]' - \
+  #         tight_layout \
+  #         savefig F5_hifreq_pi_de.png --dpi=800
+
+  cross-validate: python src/cross_validate.py -m {{.CLI_ARGS}}
+
+  convert-nc:
+    vars:
+      NC_FILE_LIST:
+        sh: echo {{.NC_FILES}} | sed -e "s/ /\n/g" | sed -e "s/\(.*\)/'\1',/g" | tr -d "\n"
+    cmds:
+      - python
+          scripts/nc_to_np.py
+          convert_multiple
+          --output-dir=data
+          --variable-name={{.VAR_NAME}}
+          --input-files="[{{.NC_FILE_LIST}}]"
+
+  venv:
+    vars:
+      VENV_PATH: venv
+    preconditions:
+      - sh: "[ ! -d {{.VENV_PATH}} ]"
+    cmds:
+      - python -m venv {{.VENV_PATH}}

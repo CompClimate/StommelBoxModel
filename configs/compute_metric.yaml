@@ -1,0 +1,20 @@
+# @package _global_
+
+defaults:
+  - _self_
+  - data: physics_informed
+  - model: mlp
+  - model/optimizer: adam
+  - model/scheduler: null
+  - model/loss_fun: mse
+  - logger: many_loggers
+  - trainer: default
+  - paths: default
+  - extras: default
+  - hydra: default
+  - experiment: null
+
+task_name: "metric"
+metric_type: ???
+job_name: "${now:%Y-%m-%d}_${now:%H-%M-%S}"
+ckpt_path: ???

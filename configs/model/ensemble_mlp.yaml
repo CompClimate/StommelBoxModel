@@ -1,0 +1,12 @@
+_target_: src.models.module.EnsembleModel
+
+loss_fun:
+  _target_: torch.nn.MSELoss
+
+net_cfg:
+  __target__: src.models.components.dense.MLPModel
+  input_dim: 3
+  hidden_dim: 128
+  n_hidden: 2
+
+num_models: 50

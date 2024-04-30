@@ -1,0 +1,14 @@
+# @package _global_
+
+defaults:
+  - _self_
+  - box_model: basic
+  - density: linear
+  - init_time_series: zero
+  - s_forcing: sinusoidal_stationary
+  - solution: ivp
+  - t_forcing: null
+
+save_dir: data/
+save_name: ???
+overwrite_existing: False
