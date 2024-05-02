@@ -40,9 +40,10 @@ def get_X_y(dataset, device):
 
 
 @torch.no_grad()
-def compute_bias(model, X, y):
+def compute_bias(model, X, y, num_samples: int = 50):
     if hasattr(model, "net") and type(model.net).__name__ == "BNNTorch":
         preds = model(X)
+        preds = [model(X) for _ in range(num_samples)]
         preds = torch.stack(preds)
         pred_mean = preds.mean(axis=0).squeeze()
         pred_std = preds.std(axis=0).squeeze()
@@ -56,9 +57,10 @@ def compute_bias(model, X, y):
 
 
 @torch.no_grad()
-def compute_pred(model, X, y):
+def compute_pred(model, X, y, num_samples: int = 50):
     if hasattr(model, "net") and type(model.net).__name__ == "BNNTorch":
         preds = model(X)
+        preds = [model(X) for _ in range(num_samples)]
         preds = torch.stack(preds)
         pred_mean = preds.mean(axis=0).squeeze()
         pred_std = preds.std(axis=0).squeeze()
