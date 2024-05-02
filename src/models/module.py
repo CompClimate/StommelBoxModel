@@ -10,8 +10,6 @@ from torchmetrics.regression import MeanSquaredError
 
 
 class Model(pl.LightningModule):
-    """A Pytorch Lightning wrapper around a torch model."""
-
     def __init__(
         self,
         net: nn.Module,
