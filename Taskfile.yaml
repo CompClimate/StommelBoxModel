@@ -27,16 +27,6 @@ tasks:
   eval: python src/eval.py {{.CLI_ARGS}}
 
   explain: python src/explain.py {{.CLI_ARGS}}
-  # explain:
-  #   cmds:
-  #     - |
-  #       python scripts/plot_csv.py \
-  #         --csv_filenames='["logs/explain/runs/F5_hifreq_pi_de_shap_deeplift/explanations.csv"]' \
-  #         --text.usetex=True - \
-  #         shap_heatmap '["shap_1","shap_2","shap_3","shap_4","shap_5","shap_6"]' \
-  #         --feature_names='["\(S_1\)","\(S_2\)","\(T_1\)","\(T_2\)","\(F_s\)","\(F_t\)"]' - \
-  #         tight_layout \
-  #         savefig F5_hifreq_pi_de.png --dpi=800
 
   cross-validate: python src/cross_validate.py -m {{.CLI_ARGS}}
 
