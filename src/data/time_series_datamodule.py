@@ -1,6 +1,7 @@
 from typing import Any, Optional
 
 import dill
+import numpy as np
 import torch
 import utils.data_utils as data_utils
 from lightning import LightningDataModule
@@ -15,13 +16,21 @@ class TimeSeriesDataModule(LightningDataModule):
         test_size: float,
         window_size: Optional[int] = None,
         batch_size: int = 16,
+        noise_mu: Optional[float] = None,
+        noise_std: Optional[float] = None,
     ):
         super().__init__()
 
         self.save_hyperparameters(logger=False)
+        self.window_size = window_size
 
         with open(path, "rb") as f:
             self.series_dict = dill.load(f)
+
+        if noise_mu is not None:
+            self.series_dict["q"] += np.random.normal(
+                loc=noise_mu, scale=noise_std, size=self.series_dict["q"].shape
+            )
 
         X, y = data_utils.get_raw_data(
             self.series_dict,
