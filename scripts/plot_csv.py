@@ -38,13 +38,14 @@ class CSVPlotter(Plotter):
         self.df = pd.concat(dfs, axis=1)
         self.df = self.df.rename(columns=renamer())
         self.df = pl.from_pandas(self.df)
-        self.first = True
 
-    def _plot_vars(self, fun, vars, use_shap: bool = False, **kwargs):
+    def _plot_vars(
+        self, fun, vars, use_shap: bool = False, shift_x: bool = False, **kwargs
+    ):
         if kwargs.get("x") is None:
             kwargs["x"] = (
                 range(len(self.df))
-                if self.first
+                if not shift_x
                 else range(
                     len(self.df), len(self.df) + len(self.df.get_column(kwargs["y"]))
                 )
@@ -62,8 +63,6 @@ class CSVPlotter(Plotter):
             )
         else:
             fun(data=self.df, label=vars[0], ax=self.ax, **kwargs)
-
-        self.first = False
 
 
 if __name__ == "__main__":
