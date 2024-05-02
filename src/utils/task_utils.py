@@ -85,7 +85,6 @@ def execute_task(task: Task, cfg: DictConfig):
             _cross_validate(cfg)
 
     metric_dict = trainer.callback_metrics
-
     return metric_dict, object_dict
 
 
@@ -117,13 +116,10 @@ def _train(cfg: DictConfig) -> Tuple[dict[str, Any], dict[str, Any]]:
 
 
 def _evaluate(cfg: DictConfig) -> Tuple[dict[str, Any], dict[str, Any]]:
-    assert cfg.ckpt_path
-
     essential_objects = instantiate_essentials(cfg, log)
     trainer = essential_objects["trainer"]
     model = essential_objects["model"]
     datamodule = essential_objects["datamodule"]
-
     return trainer.test(model=model, datamodule=datamodule, ckpt_path=cfg.ckpt_path)
 
 
@@ -131,6 +127,17 @@ def _explain(cfg: DictConfig):
     essential_objects = instantiate_essentials(cfg, log)
     model = essential_objects["model"].to(device="cpu")
     datamodule = essential_objects["datamodule"]
+    series_dict = datamodule.series_dict
+
+    features = []
+    if datamodule.window_size is None:
+        for ddict in series_dict["latex"].values():
+            for v in ddict.values():
+                features.append(v)
+    else:
+        features = [
+            rf"\(\tau - {i}\)" for i in reversed(range(1, datamodule.window_size + 1))
+        ]
 
     X = []
     for dataloader in [datamodule.train_dataloader(), datamodule.val_dataloader()]:
@@ -161,12 +168,15 @@ def _explain(cfg: DictConfig):
     df = pl.from_numpy(attr_values)
     df.columns = list(
         itertools.chain(
-            *[[f"{k}_{i + 1}" for i in range(X.shape[1])] for k in attrs_dict]
+            *[
+                [f"{k.capitalize()}[{features[i]}]" for i in range(X.shape[1])]
+                for k in attrs_dict
+            ]
         )
     )
 
     for j in reversed(range(X.shape[1])):
-        c = pl.Series(f"feature_{j + 1}", X[:, j].numpy())
+        c = pl.Series(features[j], X[:, j].numpy())
         df = df.insert_column(0, c)
 
     save_path = Path(get_working_dir(), cfg.save_fname)
@@ -174,8 +184,6 @@ def _explain(cfg: DictConfig):
 
 
 def _cross_validate(cfg: DictConfig) -> Tuple[dict[str, Any], dict[str, Any]]:
-    # assert cfg.ckpt_path
-
     essential_objects = instantiate_essentials(cfg, log)
     trainer = essential_objects["trainer"]
     model = essential_objects["model"]
@@ -204,44 +212,3 @@ def _cross_validate(cfg: DictConfig) -> Tuple[dict[str, Any], dict[str, Any]]:
     metric_dict = {k: v[0] for k, v in metric_dict.items()}
 
     return metric_dict
-
-
-# @task_wrapper
-# def train(cfg: DictConfig) -> Tuple[dict[str, Any], dict[str, Any]]:
-#     if cfg.get("seed"):
-#         L.seed_everything(cfg.seed, workers=True)
-
-#     essential_objects = instantiate_essentials(cfg, log)
-#     object_dict = {
-#         "cfg": cfg,
-#         **essential_objects,
-#     }
-
-#     logger = essential_objects["logger"]
-#     trainer = essential_objects["trainer"]
-#     model = essential_objects["model"]
-#     datamodule = essential_objects["datamodule"]
-
-#     if logger:
-#         log.info("Logging hyperparameters!")
-#         log_hyperparameters(object_dict)
-
-#     if cfg.get("train"):
-#         log.info("Starting training!")
-#         trainer.fit(model=model, datamodule=datamodule, ckpt_path=cfg.get("ckpt_path"))
-
-#     train_metrics = trainer.callback_metrics
-
-#     if cfg.get("test"):
-#         log.info("Starting testing!")
-#         ckpt_path = trainer.checkpoint_callback.best_model_path
-#         if ckpt_path in ("", None):
-#             log.warning("Best ckpt not found! Using current weights for testing...")
-#             ckpt_path = None
-#         trainer.test(model=model, datamodule=datamodule, ckpt_path=ckpt_path)
-#         log.info(f"Best ckpt path: {ckpt_path}")
-
-#     test_metrics = trainer.callback_metrics
-#     metric_dict = {**train_metrics, **test_metrics}
-
-#     return metric_dict, object_dict

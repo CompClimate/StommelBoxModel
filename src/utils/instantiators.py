@@ -66,10 +66,20 @@ def instantiate_essentials(cfg: DictConfig, logger: logging.LoggerAdapter):
         log.info(f"Instantiating datamodule <{cfg.cv._target_}>")
         datamodule: LightningDataModule = hydra.utils.instantiate(cfg.cv)
 
+    input_dim = (
+        cfg.data.window_size
+        if cfg.data.window_size is not None
+        else sum(map(lambda x: len(x), datamodule.series_dict["features"].values()))
+    )
+
+    if hasattr(cfg.model, "net"):
+        cfg.model.net.input_dim = input_dim
+    elif hasattr(cfg.model, "net_cfg"):
+        cfg.model.net_cfg.input_dim = input_dim
+
     log.info(f"Instantiating model <{cfg.model._target_}>")
     m = hydra.utils.instantiate(cfg.model)
-    # print(f"{type(m).__name__ = }")
-    # exit()
+
     if cfg.ckpt_path:
         if type(m).__name__ == "EnsembleModel":
             model = EnsembleModel.load_from_checkpoint(
