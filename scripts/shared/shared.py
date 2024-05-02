@@ -75,8 +75,11 @@ class Plotter(ABC):
         plt.rcParams.update(rcParams)
         return self
 
-    def shap_heatmap(self, vars, **kwargs):
-        return self._plot("heatmap", vars, use_shap=True, **kwargs)
+    def shap_heatmap(self, column_pattern, **kwargs):
+        cols = [
+            col for col in self.df.columns if col.lower().find(column_pattern) != -1
+        ]
+        return self._plot("heatmap", cols, use_shap=True, **kwargs)
 
     def lineplot(self, vars=[], **kwargs):
         return self._plot("lineplot", vars, **kwargs)
@@ -90,13 +93,19 @@ class Plotter(ABC):
     def pairplot(self, **kwargs):
         return self._plot("pairplot", vars=[], **kwargs)
 
-    def bands(self, col_name, std, **kwargs):
+    def bands(self, col_name, std, shift_x: bool = False, **kwargs):
         if kwargs.get("x") is None:
-            kwargs["x"] = range(len(self.df))
+            kwargs["x"] = (
+                range(len(self.df))
+                if not shift_x
+                else range(
+                    len(self.df), len(self.df) + len(self.df.get_column(col_name))
+                )
+            )
 
         col = self.df.get_column(col_name).to_numpy()
         val = self.df.get_column(std).to_numpy()
-        self.ax.fill_between(y1=col - val, y2=col + val, **kwargs)
+        self.ax.fill_between(y1=col - val, y2=col + val, alpha=0.3, **kwargs)
         return self
 
     def show(self):
