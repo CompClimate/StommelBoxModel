@@ -79,8 +79,10 @@ class Plotter:
         N_forcings = len(forcings)
         N_qs = len(qs)
 
-        gs_vars = gridspec.GridSpec(nrows=2, ncols=N_vars // 2)
-        gs_forcings = gridspec.GridSpec(nrows=1, ncols=N_forcings)
+        gs_vars = gridspec.GridSpec(
+            nrows=max(N_vars // 2, 1), ncols=max(N_vars // 2, 1)
+        )
+        gs_forcings = gridspec.GridSpec(nrows=N_forcings, ncols=1)
         gs_qs = gridspec.GridSpec(nrows=1, ncols=N_qs)
 
         self.fig_vars = plt.figure()
