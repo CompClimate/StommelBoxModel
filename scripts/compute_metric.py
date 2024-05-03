@@ -10,6 +10,7 @@ import hydra
 import polars as pl
 import rootutils
 import torch
+from lightning.pytorch.utilities.model_summary import summarize
 from omegaconf import DictConfig
 
 from src.utils import RankedLogger, get_working_dir, register_resolvers
@@ -25,6 +26,7 @@ register_resolvers()
 class MetricType(StrEnum):
     Bias = "bias"
     Prediction = "prediction"
+    NumberOfParams = "number_of_params"
 
 
 def get_X_y(dataset, device):
@@ -72,6 +74,10 @@ def compute_pred(model, X, y, num_samples: int = 50):
     return dict(pred_mean=pred_mean, pred_std=pred_std, y=y)
 
 
+def compute_number_of_params(model, **kwargs):
+    return summarize(model, **kwargs)
+
+
 @hydra.main(
     version_base="1.3", config_path="../configs", config_name="compute_metric.yaml"
 )
@@ -101,6 +107,10 @@ def main(cfg: DictConfig):
                 metric = compute_bias(model, X, y)
             case MetricType.Prediction:
                 metric = compute_pred(model, X, y)
+            case MetricType.NumberOfParams:
+                metric = compute_number_of_params(model)
+                print(metric)
+                return
 
         for k in metric:
             metric[k] = metric[k].cpu().numpy()
